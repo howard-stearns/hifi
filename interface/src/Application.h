@@ -165,6 +165,7 @@ public:
     void initializeUi();
     void paintGL();
     void resizeGL();
+    void makeFade(const VoxelPositionSize& rootDetails, OctreeFade fade);
 
     void resizeEvent(QResizeEvent * size);
 

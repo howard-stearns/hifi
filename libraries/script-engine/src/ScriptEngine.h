@@ -134,6 +134,7 @@ signals:
     void loadScript(const QString& scriptName, bool isUserLoaded);
     void reloadScript(const QString& scriptName, bool isUserLoaded);
     void doneRunning();
+    void graphicsFade(float red, float green, float blue);
 
 protected:
     QString _scriptContents;

@@ -3857,6 +3857,15 @@ void Application::nodeAdded(SharedNodePointer node) {
     }
 }
 
+void Application::makeFade(const VoxelPositionSize& rootDetails, OctreeFade fade) {
+    fade.voxelDetails = rootDetails;
+    const float slightly_smaller = 0.99f;
+    fade.voxelDetails.s = fade.voxelDetails.s * slightly_smaller;
+    _octreeFadesLock.lockForWrite();
+    _octreeFades.push_back(fade);
+    _octreeFadesLock.unlock();
+}
+
 void Application::nodeKilled(SharedNodePointer node) {
 
     // These are here because connecting NodeList::nodeKilled to OctreePacketProcessor::nodeKilled doesn't work:
@@ -3887,13 +3896,7 @@ void Application::nodeKilled(SharedNodePointer node) {
 
             // Add the jurisditionDetails object to the list of "fade outs"
             if (!Menu::getInstance()->isOptionChecked(MenuOption::DontFadeOnOctreeServerChanges)) {
-                OctreeFade fade(OctreeFade::FADE_OUT, NODE_KILLED_RED, NODE_KILLED_GREEN, NODE_KILLED_BLUE);
-                fade.voxelDetails = rootDetails;
-                const float slightly_smaller = 0.99f;
-                fade.voxelDetails.s = fade.voxelDetails.s * slightly_smaller;
-                _octreeFadesLock.lockForWrite();
-                _octreeFades.push_back(fade);
-                _octreeFadesLock.unlock();
+                makeFade(rootDetails, OctreeFade(OctreeFade::FADE_OUT, NODE_KILLED_RED, NODE_KILLED_GREEN, NODE_KILLED_BLUE));
             }
 
             // If the model server is going away, remove it from our jurisdiction map so we don't send voxels to a dead server
@@ -3974,13 +3977,7 @@ int Application::parseOctreeStats(const QByteArray& packet, const SharedNodePoin
 
             // Add the jurisditionDetails object to the list of "fade outs"
             if (!Menu::getInstance()->isOptionChecked(MenuOption::DontFadeOnOctreeServerChanges)) {
-                OctreeFade fade(OctreeFade::FADE_OUT, NODE_ADDED_RED, NODE_ADDED_GREEN, NODE_ADDED_BLUE);
-                fade.voxelDetails = rootDetails;
-                const float slightly_smaller = 0.99f;
-                fade.voxelDetails.s = fade.voxelDetails.s * slightly_smaller;
-                _octreeFadesLock.lockForWrite();
-                _octreeFades.push_back(fade);
-                _octreeFadesLock.unlock();
+                makeFade(rootDetails, OctreeFade(OctreeFade::FADE_OUT, NODE_ADDED_RED, NODE_ADDED_GREEN, NODE_ADDED_BLUE));
             }
         } else {
             jurisdiction->unlock();
@@ -4078,6 +4075,11 @@ void Application::registerScriptEngineWithApplicationServices(ScriptEngine* scri
 
     connect(scriptEngine, SIGNAL(loadScript(const QString&, bool)), this, SLOT(loadScript(const QString&, bool)));
     connect(scriptEngine, SIGNAL(reloadScript(const QString&, bool)), this, SLOT(reloadScript(const QString&, bool)));
+
+    connect(scriptEngine, &ScriptEngine::graphicsFade, this, [=](float r, float g, float b) {
+        VoxelPositionSize rootDetails = {0.0f, 0.0f, 0.0f, 1.0f};
+        makeFade(rootDetails, OctreeFade(OctreeFade::FADE_OUT, r, g, b));
+    });
 
     scriptEngine->registerGlobalObject("Overlays", &_overlays);
     qScriptRegisterMetaType(scriptEngine, OverlayPropertyResultToScriptValue, OverlayPropertyResultFromScriptValue);
