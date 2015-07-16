@@ -33,6 +33,7 @@ SphereEntityItem::SphereEntityItem(const EntityItemID& entityItemID, const Entit
         EntityItem(entityItemID, properties) 
 { 
     _type = EntityTypes::Sphere;
+    _created = properties.getCreated();
     setProperties(properties);
     _volumeMultiplier *= PI / 6.0f;
 }
