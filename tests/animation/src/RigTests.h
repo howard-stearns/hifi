@@ -47,6 +47,7 @@ class RigTests : public QObject {
  private slots:
     void initTestCase();
     void initialPoseArmsDown();
+    void animationState();
 
  private:
     RigPointer _rig;

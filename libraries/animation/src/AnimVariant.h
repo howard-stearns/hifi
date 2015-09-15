@@ -16,6 +16,7 @@
 #include <glm/gtx/quaternion.hpp>
 #include <map>
 #include <set>
+#include "AnimationLogging.h"
 
 class AnimVariant {
 public:
@@ -153,6 +154,14 @@ public:
 
     void setTrigger(const std::string& key) { _triggers.insert(key); }
     void clearTriggers() { _triggers.clear(); }
+    void updateFromHash(const QHash<QString, AnimVariant>& source) {
+        QHashIterator<QString, AnimVariant> i(source);
+        while (i.hasNext()) {
+            i.next();
+            _map[i.key().toStdString()] = i.value();
+        }
+
+    }
 
 protected:
     std::map<std::string, AnimVariant> _map;

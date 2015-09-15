@@ -103,3 +103,14 @@ void RigTests::initTestCase() {
 void RigTests::initialPoseArmsDown() {
     reportSome(_rig);
 }
+
+void RigTests::animationState() {
+    _rig->getAnimationState()->set("foo", true); // These can also be set from Javascript MyAvatar
+    _rig->getAnimationState()->set("bar", 99.0f);
+    QVERIFY(_rig->getAnimationState()->get("foo", false) == true);
+    QVERIFY(_rig->getAnimationState()->get("bar", -1.0f) == 99.0f);
+    _rig->setEnableAnimGraph(true); // Otherwise the rig machinery doesn't run.
+    _rig->computeMotionAnimationState(0.1f, glm::vec3(0.0f), glm::vec3(0.0f), glm::quat()); // transfers state to anim vars
+    QVERIFY(_rig->getAnimVars().lookup("foo", false) == true);
+    QVERIFY(_rig->getAnimVars().lookup("bar", -1.0f) == 99.0f);
+}

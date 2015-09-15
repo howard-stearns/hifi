@@ -438,6 +438,7 @@ void Rig::computeMotionAnimationState(float deltaTime, const glm::vec3& worldPos
 
     if (_enableAnimGraph) {
 
+        _animVars.updateFromHash(_sharedVars.hash);
         glm::vec3 localVel = glm::inverse(worldRotation) * workingVelocity;
         float forwardSpeed = glm::dot(localVel, IDENTITY_FRONT);
         float lateralSpeed = glm::dot(localVel, IDENTITY_RIGHT);

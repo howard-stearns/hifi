@@ -66,6 +66,7 @@ public:
 
     float getRealWorldFieldOfView() { return _realWorldFieldOfView.get(); }
 
+    Q_INVOKABLE SharedAnimationState* getAnimationState() { return _rig->getAnimationState(); }
     const QList<AnimationHandlePointer>& getAnimationHandles() const { return _rig->getAnimationHandles(); }
     AnimationHandlePointer addAnimationHandle() { return _rig->createAnimationHandle(); }
     void removeAnimationHandle(const AnimationHandlePointer& handle) { _rig->removeAnimationHandle(handle); }
