@@ -12,6 +12,7 @@
 #ifndef hifi_ScriptableRigStateVariables_h
 #define hifi_ScriptableRigStateVariables_h
 
+#include <functional>
 #include <QObject>
 #include <QMutex>
 #include <QString>
