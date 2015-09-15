@@ -181,7 +181,7 @@ public:
     AnimNode::ConstPointer getAnimNode() const { return _animNode; }
     AnimSkeleton::ConstPointer getAnimSkeleton() const { return _animSkeleton; }
     ScriptableRigStateVariables* getAnimationState() { return &_sharedVars; }
-    AnimVariantMap& getAnimVars() { return _animVars; } // for testing
+    const AnimVariantMap& getAnimVars() const { return _animVars; } // for observation, e.g., testing
 
  protected:
 
