@@ -56,12 +56,12 @@ static void localLightFromScriptValue(const QScriptValue& value, AvatarManager::
     vec3FromScriptValue(value.property("color"), light.color);
 }
 
-static QScriptValue animationStateToScriptValue(QScriptEngine* engine, SharedAnimationState* const &in) {
+static QScriptValue animationStateToScriptValue(QScriptEngine* engine, ScriptableRigStateVariables* const &in) {
     return engine->newQObject(in);
 }
 
-static void animationStateFromScriptValue(const QScriptValue &object, SharedAnimationState* &out) {
-    out = qobject_cast<SharedAnimationState*>(object.toQObject());
+static void animationStateFromScriptValue(const QScriptValue &object, ScriptableRigStateVariables* &out) {
+    out = qobject_cast<ScriptableRigStateVariables*>(object.toQObject());
 }
 
 void AvatarManager::registerMetaTypes(QScriptEngine* engine) {

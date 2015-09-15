@@ -42,27 +42,13 @@
 
 #include "AnimNode.h"
 #include "AnimNodeLoader.h"
+#include "ScriptableRigStateVariables.h"
 
 class AnimationHandle;
 typedef std::shared_ptr<AnimationHandle> AnimationHandlePointer;
 
 class Rig;
 typedef std::shared_ptr<Rig> RigPointer;
-
-class SharedAnimationState : public QObject {
-    Q_OBJECT
-public:
-    // locked so that multiple scripts (and the rig) can access from different threads.
-    Q_INVOKABLE bool get(const QString& key, const bool& defaultValue) const { QMutexLocker locker(&_mutex); return hash.contains(key) ? hash.value(key).getBool() : defaultValue; }
-    Q_INVOKABLE float get(const QString& key, const float& defaultValue) const { QMutexLocker locker(&_mutex); return hash.contains(key) ? hash.value(key).getFloat() : defaultValue; }
-    Q_INVOKABLE void set(const QString& key, bool value) { QMutexLocker locker(&_mutex);  hash.insert(key, AnimVariant(value)); }
-    Q_INVOKABLE void set(const QString& key, float value) { QMutexLocker locker(&_mutex);  hash.insert(key, AnimVariant(value)); }
-    // Note that Javascript [] notation affects QObject properties, not any operator[] that might be defined here.
-    QHash<QString, AnimVariant> hash {};
-private:
-    mutable QMutex _mutex;
-};
-Q_DECLARE_METATYPE(SharedAnimationState*)
 
 class Rig : public QObject, public std::enable_shared_from_this<Rig> {
 public:
@@ -194,7 +180,7 @@ public:
 
     AnimNode::ConstPointer getAnimNode() const { return _animNode; }
     AnimSkeleton::ConstPointer getAnimSkeleton() const { return _animSkeleton; }
-    SharedAnimationState* getAnimationState() { return &_sharedVars; }
+    ScriptableRigStateVariables* getAnimationState() { return &_sharedVars; }
     AnimVariantMap& getAnimVars() { return _animVars; } // for testing
 
  protected:
@@ -226,7 +212,7 @@ public:
     std::shared_ptr<AnimSkeleton> _animSkeleton;
     std::unique_ptr<AnimNodeLoader> _animLoader;
     AnimVariantMap _animVars;
-    SharedAnimationState _sharedVars {}; // Exposed to all scripts through MyAvatar
+    ScriptableRigStateVariables _sharedVars {}; // Exposed to all scripts through MyAvatar
     enum class RigRole {
         Idle = 0,
         Turn,
