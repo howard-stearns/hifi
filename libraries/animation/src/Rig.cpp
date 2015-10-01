@@ -1119,7 +1119,7 @@ void Rig::updateNeckJoint(int index, const HeadParameters& params) {
 
                 _animVars.set("headPosition", headPos);
                 _animVars.set("headRotation", headRot);
-                _animVars.set("headType", QString("RotationAndPosition"));
+                _animVars.set("headAndNeckType", QString("RotationAndPosition"));
                 _animVars.set("neckPosition", neckPos);
                 _animVars.set("neckRotation", neckRot);
 
@@ -1132,7 +1132,7 @@ void Rig::updateNeckJoint(int index, const HeadParameters& params) {
 
                 _animVars.unset("headPosition");
                 _animVars.set("headRotation", realLocalHeadOrientation);
-                _animVars.set("headType", QString("RotationOnly"));
+                _animVars.set("headAndNeckType", QString("RotationOnly"));
                 _animVars.unset("neckPosition");
                 _animVars.unset("neckRotation");
             }
