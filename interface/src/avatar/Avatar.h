@@ -226,6 +226,7 @@ private:
     bool _initialized;
     NetworkTexturePointer _billboardTexture;
     bool _shouldRenderBillboard;
+    bool _shouldSkipRender;
     bool _isLookAtTarget;
 
     void renderBillboard(RenderArgs* renderArgs);

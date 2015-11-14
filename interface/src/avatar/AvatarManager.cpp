@@ -67,6 +67,10 @@ AvatarManager::AvatarManager(QObject* parent) :
     // register a meta type for the weak pointer we'll use for the owning avatar mixer for each avatar
     qRegisterMetaType<QWeakPointer<Node> >("NodeWeakPointer");
     _myAvatar = std::make_shared<MyAvatar>(std::make_shared<AvatarRig>());
+    _renderDistanceController.setMeasuredValueSetpoint(75.0f); // FIXME
+    _renderDistanceController.setControlledValueLowLimit(5.0f);
+    _renderDistanceController.setKP(0.3f);
+    _renderDistanceController.setHistorySize("avatar render", 75 * 4); // FIXME
 
     auto& packetReceiver = DependencyManager::get<NodeList>()->getPacketReceiver();
     packetReceiver.registerListener(PacketType::BulkAvatarData, this, "processAvatarDataPacket");
@@ -117,6 +121,7 @@ void AvatarManager::updateOtherAvatars(float deltaTime) {
     PerformanceWarning warn(showWarnings, "Application::updateAvatars()");
 
     PerformanceTimer perfTimer("otherAvatars");
+    _renderDistance = _renderDistanceController.update(qApp->getFps(), deltaTime);
 
     // simulate avatars
     AvatarHash::iterator avatarIterator = _avatarHash.begin();
