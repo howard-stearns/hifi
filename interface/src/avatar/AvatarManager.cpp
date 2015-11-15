@@ -67,10 +67,19 @@ AvatarManager::AvatarManager(QObject* parent) :
     // register a meta type for the weak pointer we'll use for the owning avatar mixer for each avatar
     qRegisterMetaType<QWeakPointer<Node> >("NodeWeakPointer");
     _myAvatar = std::make_shared<MyAvatar>(std::make_shared<AvatarRig>());
-    _renderDistanceController.setMeasuredValueSetpoint(75.0f); // FIXME
-    _renderDistanceController.setControlledValueLowLimit(5.0f);
-    _renderDistanceController.setKP(0.3f);
-    _renderDistanceController.setHistorySize("avatar render", 75 * 4); // FIXME
+    _renderDistanceController.setMeasuredValueSetpoint(60.0f); // FIXME
+    const float TREE_SCALE = 32768.0f; // Not in shared library, alas.
+    const float SMALLEST_REASONABLE_HORIZON = 0.5f; // FIXME 5
+    _renderDistanceController.setControlledValueHighLimit(1.0f/SMALLEST_REASONABLE_HORIZON);
+    _renderDistanceController.setControlledValueLowLimit(1.0f/TREE_SCALE);
+    // KP is usually tuned by setting the other constants to zero, finding the maximum value that doesn't oscillate,
+    // and taking about 0.6 of that. As a sanity check/starting point, a typical scenario if we were using KP alone,
+    // would be an error=37, and we'd want a result of 1/10m. So, KP*37=0.1 => KP=0.1/37 = 0.003;
+    _renderDistanceController.setKP(0.002f);
+    // Our anti-windup limits accumulated error to 10*targetFrameRate, so the sanity check on KI is
+    // KI*750=controlledValueHighLimit=1 => KI=1/750.
+    _renderDistanceController.setKI(0.001);
+    _renderDistanceController.setHistorySize("avatar render", 60 * 4); // FIXME
 
     auto& packetReceiver = DependencyManager::get<NodeList>()->getPacketReceiver();
     packetReceiver.registerListener(PacketType::BulkAvatarData, this, "processAvatarDataPacket");
@@ -121,7 +130,7 @@ void AvatarManager::updateOtherAvatars(float deltaTime) {
     PerformanceWarning warn(showWarnings, "Application::updateAvatars()");
 
     PerformanceTimer perfTimer("otherAvatars");
-    _renderDistance = _renderDistanceController.update(qApp->getFps(), deltaTime);
+    _renderDistance = 1.0f/_renderDistanceController.update(qApp->getFps(), deltaTime);
 
     // simulate avatars
     AvatarHash::iterator avatarIterator = _avatarHash.begin();

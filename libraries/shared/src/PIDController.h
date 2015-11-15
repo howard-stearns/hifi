@@ -3,7 +3,7 @@
 //  libraries/shared/src
 //
 //  Given a measure of system performance (such as frame rate, where bigger denotes more system work),
-//  compute a value that the system can take as input to control the amount of work done (such as an LOD distance,
+//  compute a value that the system can take as input to control the amount of work done (such as an 1/LOD-distance,
 //  where bigger tends to give a higher measured system performance value). The controller's job is to compute a
 //  controlled value such that the measured value stays near the specified setpoint, even as system load changes.
 //  See http://www.wetmachine.com/inventing-the-future/mostly-reliable-performance-of-software-processes-by-dynamic-control-of-quality-parameters/
@@ -26,14 +26,16 @@
 class PIDController {
 
 public:
+    // These three are the main interface:
     void setMeasuredValueSetpoint(float newValue) { _measuredValueSetpoint = newValue; }
     float update(float measuredValue, float dt); // returns the new computedValue
-    void setHistorySize(QString label = QString(""), int size = 0) { _history.reserve(size); _history.resize(0); _label = label; } // non empty does logging
+    void setHistorySize(QString label = QString(""), int size = 0) { _history.reserve(size); _history.resize(0); _label = label; } // non-empty does logging
 
     // There are several values that rarely change and might be thought of as "constants", but which do change during tuning, debugging, or other 
-    // special-but-expected circumstances. Thus they are not const.
+    // special-but-expected circumstances. Thus the instance vars are not const.
     float getMeasuredValueSetpoint() const { return _measuredValueSetpoint; }
-    // In normal operation (where we can easily reach setpoint), controlledValue is typcially pinned at max. Defaults to [0, max float].
+    // In normal operation (where we can easily reach setpoint), controlledValue is typcially pinned at max.
+    // Defaults to [0, max float], but for 1/LODdistance, it might be, say, [0, 0.2 or 0.1]
     float getControlledValueLowLimit() const { return _controlledValueLowLimit; }
     float getControlledValueHighLimit() const { return _controlledValueHighLimit; }
     float getAntiWindupFactor() const { return _antiWindupFactor; } // default 10

@@ -15,7 +15,7 @@
 #include "PIDController.h"
 
 float PIDController::update(float measuredValue, float dt) {
-    const float error = getMeasuredValueSetpoint() - measuredValue;   // positive value denotes performance deficit
+    const float error = getMeasuredValueSetpoint() - measuredValue;   // Sign is the direction we want measuredValue to go. Positive means go higher.
 
     const float p = getKP() * error; // term is Proportional to error
 

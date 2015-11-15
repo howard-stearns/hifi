@@ -66,9 +66,10 @@ public:
     void handleCollisionEvents(const CollisionEvents& collisionEvents);
 
     void updateAvatarPhysicsShape(const QUuid& id);
+    Q_INVOKABLE int getNumberRendered() { return _renderedAvatarCount; }
+    Q_INVOKABLE float getRenderDistance() { return _renderDistance; }
     Q_INVOKABLE float getFIXMEupdate() { return _fixmeUpdate; }
     Q_INVOKABLE void setFIXMEupdate(float f) { _fixmeUpdate = f; }
-    Q_INVOKABLE float getRenderDistance() { return _renderDistance; }
     Q_INVOKABLE void setFIXMEkp(float f) { _renderDistanceController.setKP(f); }
     Q_INVOKABLE void setFIXMEki(float f) { _renderDistanceController.setKI(f); }
     Q_INVOKABLE void setFIXMEkd(float f) { _renderDistanceController.setKD(f); }
@@ -99,7 +100,8 @@ private:
 
     bool _shouldShowReceiveStats = false;
     float _fixmeUpdate = 40.0f;
-    float _renderDistance = 40.0f;
+    float _renderDistance { 40.0f };
+    int _renderedAvatarCount {0};
     PIDController _renderDistanceController {};
 
 
