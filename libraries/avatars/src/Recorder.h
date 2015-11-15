@@ -14,7 +14,9 @@
 
 #include <recording/Forward.h>
 
-#if 0
+#if 1
+class Recorder {};
+#else
 #include "Recording.h"
 
 template<class C>
