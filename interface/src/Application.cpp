@@ -1047,7 +1047,8 @@ void Application::paintGL() {
     static uint64_t lastPaintBegin{ now };
     uint64_t diff = now - lastPaintBegin;
     if (diff != 0) {
-        _framesPerSecond.updateAverage((float)USECS_PER_SECOND / (float)diff);
+        _lastInstantaneousFps = (float)USECS_PER_SECOND / (float)diff;
+        _framesPerSecond.updateAverage(_lastInstantaneousFps);
     }
 
     lastPaintBegin = now;

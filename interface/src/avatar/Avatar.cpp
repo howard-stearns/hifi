@@ -194,16 +194,26 @@ void Avatar::simulate(float deltaTime) {
         _shouldRenderBillboard = true;
         qCDebug(interfaceapp) << "Billboarding" << (isMyAvatar() ? "myself" : getSessionUUID()) << "for LOD" << getLODDistance();
     }
+#define PID_TUNING 1
+#ifdef PID_TUNING
+    const float SKIP_HYSTERESIS_PROPORTION = 0.0f;
+#else
+    const float SKIP_HYSTERESIS_PROPORTION = BILLBOARD_HYSTERESIS_PROPORTION;
+#endif
     float renderDistance = DependencyManager::get<AvatarManager>()->getRenderDistance();
     float distance = glm::distance(qApp->getCamera()->getPosition(), _position);
     if (_shouldSkipRender) {
-        if (distance < renderDistance * (1.0f - BILLBOARD_HYSTERESIS_PROPORTION)) {
+        if (distance < renderDistance * (1.0f - SKIP_HYSTERESIS_PROPORTION)) {
             _shouldSkipRender = false;
+#ifndef PID_TUNING
             qCDebug(interfaceapp) << "Rerendering" << (isMyAvatar() ? "myself" : getSessionUUID()) << "for LOD" << getLODDistance();
+#endif
         }
-    } else if (distance > renderDistance * (1.0f + BILLBOARD_HYSTERESIS_PROPORTION)) {
+    } else if (distance > renderDistance * (1.0f + SKIP_HYSTERESIS_PROPORTION)) {
         _shouldSkipRender = true;
+#ifndef PID_TUNING
         qCDebug(interfaceapp) << "Unrendering" << (isMyAvatar() ? "myself" : getSessionUUID()) << "for LOD" << getLODDistance();
+#endif
     }
 
     // simple frustum check

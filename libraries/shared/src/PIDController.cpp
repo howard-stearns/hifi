@@ -14,12 +14,12 @@
 #include "SharedLogging.h"
 #include "PIDController.h"
 
-float PIDController::update(float measuredValue, float dt) {
+float PIDController::update(float measuredValue, float dt, bool resetAccumulator) {
     const float error = getMeasuredValueSetpoint() - measuredValue;   // Sign is the direction we want measuredValue to go. Positive means go higher.
 
     const float p = getKP() * error; // term is Proportional to error
 
-    const float accumulatedError = glm::clamp(error * dt + _lastAccumulation,  // integrate error
+    const float accumulatedError = glm::clamp(error * dt + (resetAccumulator ? 0 : _lastAccumulation),  // integrate error
         getAccumulatedValueLowLimit(),   // but clamp by anti-windup limits
         getAccumulatedValueHighLimit());
     const float i = getKI() * accumulatedError; // term is Integral of error
@@ -27,7 +27,7 @@ float PIDController::update(float measuredValue, float dt) {
     const float changeInError = (error - _lastError) / dt;  // positive value denotes increasing deficit
     const float d = getKD() * changeInError; // term is Derivative of Error
 
-    const float computedValue = glm::clamp(p + i + d,
+    const float computedValue = glm::clamp(p + i + d + getBias(),
         getControlledValueLowLimit(),
         getControlledValueHighLimit());
 
@@ -57,7 +57,7 @@ float PIDController::update(float measuredValue, float dt) {
             }
             qCDebug(shared) << "Limits: accumulate" << getAccumulatedValueLowLimit() << getAccumulatedValueHighLimit() <<
                 "controlled" << getControlledValueLowLimit() << getControlledValueHighLimit() <<
-                "kp/ki/kd" << getKP() << getKI() << getKD();
+                "kp/ki/kd/bias" << getKP() << getKI() << getKD() << getBias();
             _history.resize(0);
         }
     }

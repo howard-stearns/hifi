@@ -159,6 +159,7 @@ public:
     bool isForeground() const { return _isForeground; }
     
     float getFps() const { return _fps; }
+    float getLastInstanteousFps() const { return _lastInstantaneousFps; }
 
     float getFieldOfView() { return _fieldOfView.get(); }
     void setFieldOfView(float fov);
@@ -430,6 +431,7 @@ private:
     float _fps;
     QElapsedTimer _timerStart;
     QElapsedTimer _lastTimeUpdated;
+    float _lastInstantaneousFps { 0.0f };
 
     ShapeManager _shapeManager;
     PhysicalEntitySimulation _entitySimulation;

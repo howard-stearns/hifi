@@ -73,8 +73,10 @@ public:
     Q_INVOKABLE void setFIXMEkp(float f) { _renderDistanceController.setKP(f); }
     Q_INVOKABLE void setFIXMEki(float f) { _renderDistanceController.setKI(f); }
     Q_INVOKABLE void setFIXMEkd(float f) { _renderDistanceController.setKD(f); }
+    Q_INVOKABLE void setFIXMEbias(float f) { _renderDistanceController.setBias(f); }
     Q_INVOKABLE void setFIXMElow(float f) { _renderDistanceController.setControlledValueLowLimit(f); }
     Q_INVOKABLE void setFIXMEhigh(float f) { _renderDistanceController.setControlledValueHighLimit(f); }
+    Q_INVOKABLE void setFIXMEfeedForward(float f) { _renderFeedForward = f; }
    
 public slots:
     void setShouldShowReceiveStats(bool shouldShowReceiveStats) { _shouldShowReceiveStats = shouldShowReceiveStats; }
@@ -101,6 +103,7 @@ private:
     bool _shouldShowReceiveStats = false;
     float _fixmeUpdate = 40.0f;
     float _renderDistance { 40.0f };
+    float _renderFeedForward { 5.0f };
     int _renderedAvatarCount {0};
     PIDController _renderDistanceController {};
 
