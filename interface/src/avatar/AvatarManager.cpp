@@ -140,12 +140,13 @@ void AvatarManager::updateOtherAvatars(float deltaTime) {
     PerformanceTimer perfTimer("otherAvatars");
     const float FEED_FORWARD_RANGE = 2;
     const float fps = qApp->getLastInstanteousFps();
-    const float paintWait = qApp->FIXME / 1000.0f;
+    const float paintWait = qApp->getLastDisplayPeriod() / 1000.0f;
     //const float modularizedPeriod = floor((1000.0f / std::min(fps, TARGET_FPS)) / TARGET_PERIOD_MS) * TARGET_PERIOD_MS;
     // measured value: 1) bigger => more desirable plant activity (i.e., more rendering), 2) setpoint=TARGET_PERIOD_MS=13.333
     // single vsync: no load=>1or2. high load=>12or13
     // over vsync: just over: 13. way over: 14...15...16
-    const float effective = ((1000.0f / fps) < TARGET_PERIOD_MS) ? (TARGET_PERIOD_MS - paintWait) : ((2.0f * TARGET_PERIOD_MS) - paintWait);
+    //const float effective = ((1000.0f / fps) < TARGET_PERIOD_MS) ? (TARGET_PERIOD_MS - paintWait) : ((2.0f * TARGET_PERIOD_MS) - paintWait);
+    const float effective = qApp->getLastDeducedNonVSyncFps();
     const bool isAtSetpoint = false; //FIXME fabsf(effectiveFps - _renderDistanceController.getMeasuredValueSetpoint()) < FEED_FORWARD_RANGE;
     const float distance = 1.0f / _renderDistanceController.update(effective + (isAtSetpoint ? _renderFeedForward : 0.0f), deltaTime, isAtSetpoint, fps, paintWait);
 

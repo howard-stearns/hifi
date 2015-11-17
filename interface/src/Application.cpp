@@ -1061,8 +1061,9 @@ void Application::paintGL() {
     uint64_t now = usecTimestampNow();
     static uint64_t lastPaintBegin{ now };
     uint64_t diff = now - lastPaintBegin;
+    float instanteousFps = 0.0f;
     if (diff != 0) {
-        _lastInstantaneousFps = (float)USECS_PER_SECOND / (float)diff;
+        instantaneousFps = (float)USECS_PER_SECOND / (float)diff;
         _framesPerSecond.updateAverage(_lastInstantaneousFps);
     }
 
@@ -1327,7 +1328,7 @@ void Application::paintGL() {
         // Ensure all operations from the previous context are complete before we try to read the fbo
         glWaitSync(sync, 0, GL_TIMEOUT_IGNORED);
         glDeleteSync(sync);
-        uint64_t FIXMEstart = usecTimestampNow();
+        uint64_t displayStart = usecTimestampNow();
 
         {
             PROFILE_RANGE(__FUNCTION__ "/pluginDisplay");
@@ -1340,8 +1341,18 @@ void Application::paintGL() {
             PerformanceTimer perfTimer("bufferSwap");
             displayPlugin->finishFrame();
         }
-        uint64_t FIXMEend = usecTimestampNow();
-        FIXME = (float)(FIXMEend - FIXMEstart);
+        uint64_t displayEnd = usecTimestampNow();
+        uint64_t displayEnd = usecTimestampNow();
+        // Store together, without Application::idle happening in between setting fps and period.
+        _lastInstantaneousFps = instanteousFps;
+        _lastDisplayPeriod = (float)(displayEnd - diplayStart); // usecs
+        const float paintWait = _lastDisplayPeriod / (float)USECS_PER_SECOND;
+        const float targetPeriod = 1.0f / (isHMDMode() ? 75.0 : 60.0);
+        const float actualPeriod = 1.0f / instanteousFps;
+        const float modularPeriod = round(actualPeriod / targetPeriod) * targetPeriod;
+        const float deducedNonVSyncPeriod = modularPeriod - paintWait;
+        _lastDeducedNonVSyncFps = 1.0f / deducedNonVSyncPeriod;
+
     }
 
     {

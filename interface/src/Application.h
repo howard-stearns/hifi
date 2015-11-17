@@ -160,7 +160,8 @@ public:
     
     float getFps() const { return _fps; }
     float getLastInstanteousFps() const { return _lastInstantaneousFps; }
-    float FIXME{ 0.0f };
+    float getLastDisplayPeriod() const { return _lastDisplayPeriod; };
+    float getLastDeducedNonVSyncFps() const { return _lastDeducedNonVSyncFps; }
 
     float getFieldOfView() { return _fieldOfView.get(); }
     void setFieldOfView(float fov);
@@ -433,6 +434,8 @@ private:
     QElapsedTimer _timerStart;
     QElapsedTimer _lastTimeUpdated;
     float _lastInstantaneousFps { 0.0f };
+    float _lastDisplayPeriod { 0.0f };
+    float _lastDeducedNonVSyncFps { 0.0f };
 
     ShapeManager _shapeManager;
     PhysicalEntitySimulation _entitySimulation;
