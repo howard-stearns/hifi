@@ -1312,6 +1312,7 @@ void Application::paintGL() {
         // Ensure all operations from the previous context are complete before we try to read the fbo
         glWaitSync(sync, 0, GL_TIMEOUT_IGNORED);
         glDeleteSync(sync);
+        uint64_t FIXMEstart = usecTimestampNow();
 
         {
             PROFILE_RANGE(__FUNCTION__ "/pluginDisplay");
@@ -1324,6 +1325,8 @@ void Application::paintGL() {
             PerformanceTimer perfTimer("bufferSwap");
             displayPlugin->finishFrame();
         }
+        uint64_t FIXMEend = usecTimestampNow();
+        FIXME = (float)(FIXMEend - FIXMEstart);
     }
 
     {

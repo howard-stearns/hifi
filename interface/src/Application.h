@@ -160,6 +160,7 @@ public:
     
     float getFps() const { return _fps; }
     float getLastInstanteousFps() const { return _lastInstantaneousFps; }
+    float FIXME{ 0.0f };
 
     float getFieldOfView() { return _fieldOfView.get(); }
     void setFieldOfView(float fov);

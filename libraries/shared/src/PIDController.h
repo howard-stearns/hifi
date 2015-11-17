@@ -28,7 +28,7 @@ class PIDController {
 public:
     // These three are the main interface:
     void setMeasuredValueSetpoint(float newValue) { _measuredValueSetpoint = newValue; }
-    float update(float measuredValue, float dt, bool resetAccumulator = false); // returns the new computedValue
+    float update(float measuredValue, float dt, bool resetAccumulator = false, float FIXME1 = 0.0f, float FIXME2 = 0.0f); // returns the new computedValue
     void setHistorySize(QString label = QString(""), int size = 0) { _history.reserve(size); _history.resize(0); _label = label; } // non-empty does logging
 
     // There are several values that rarely change and might be thought of as "constants", but which do change during tuning, debugging, or other 
@@ -56,6 +56,8 @@ public:
 
     class Row { // one row of accumulated history, used only for logging (if at all)
     public:
+        float FIXME1;
+        float FIXME2;
         float measured;
         float dt;
         float error;

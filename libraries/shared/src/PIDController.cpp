@@ -14,7 +14,7 @@
 #include "SharedLogging.h"
 #include "PIDController.h"
 
-float PIDController::update(float measuredValue, float dt, bool resetAccumulator) {
+float PIDController::update(float measuredValue, float dt, bool resetAccumulator, float FIXME1, float FIXME2) {
     const float error = getMeasuredValueSetpoint() - measuredValue;   // Sign is the direction we want measuredValue to go. Positive means go higher.
 
     const float p = getKP() * error; // term is Proportional to error
@@ -39,6 +39,8 @@ float PIDController::update(float measuredValue, float dt, bool resetAccumulator
         _history.resize(n + 1);
         Row& next = _history[n];
         next.measured = measuredValue;
+        next.FIXME1 = FIXME1;
+        next.FIXME2 = FIXME2;
         next.dt = dt;
         next.error = error;
         next.accumulated = accumulatedError;
@@ -48,10 +50,10 @@ float PIDController::update(float measuredValue, float dt, bool resetAccumulator
         next.d = d;
         next.computed = computedValue;
         if (_history.size() == _history.capacity()) { // report when buffer is full
-            qCDebug(shared) << _label << "measured dt || error accumulated changed || p i d controlled";
+            qCDebug(shared) << _label << "measured dt FIXME || error accumulated changed || p i d controlled";
             for (int i = 0; i < _history.size(); i++) {
                 Row& row = _history[i];
-                qCDebug(shared) << row.measured << row.dt <<
+                qCDebug(shared) << row.measured << row.dt << row.FIXME1 << row.FIXME2 <<
                     "||" << row.error << row.accumulated << row.changed <<
                     "||" << row.p << row.i << row.d << row.computed;
             }
