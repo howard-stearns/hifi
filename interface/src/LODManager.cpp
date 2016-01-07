@@ -21,6 +21,7 @@
 
 Setting::Handle<float> desktopLODDecreaseFPS("desktopLODDecreaseFPS", DEFAULT_DESKTOP_LOD_DOWN_FPS);
 Setting::Handle<float> hmdLODDecreaseFPS("hmdLODDecreaseFPS", DEFAULT_HMD_LOD_DOWN_FPS);
+// FIXME comments, and use of term acuity
 // There are two different systems in use, based on lodPreference:
 // pid: renderDistance is adjusted by a PID such that frame rate targets are met.
 // acuity:  a pseudo-acuity target is held, or adjusted to match minimum frame rates (and a PID controlls avatar rendering distance)
@@ -43,8 +44,8 @@ LODManager::LODManager() {
     // Turn on logging with the following (or from js with LODManager.setRenderDistanceControllerHistory("render pid", 240))
     //setRenderDistanceControllerHistory("render pid", 60 * 4);
     // Note that extra logging/hysteresis is turned off in Avatar.cpp when the above logging is on.
-    setRenderDistanceKP(0.000012f); // Usually about 0.6 of largest that doesn't oscillate when other parameters 0.
-    setRenderDistanceKI(0.00002f); // Big enough to bring us to target with the above KP.
+    setRenderDistanceKP(1.4e-6); //fixme 0.000012f); // Usually about 0.6 of largest that doesn't oscillate when other parameters 0.
+    setRenderDistanceKI(1.0e-6); // 0.00002f); // Big enough to bring us to target with the above KP.
 }
 
 float LODManager::getLODDecreaseFPS() {
@@ -238,7 +239,7 @@ QString LODManager::getLODFeedbackText() {
     return result;
 }
 
-static float renderDistance = (float)TREE_SCALE;
+static float renderDistance = (float)DEFAULT_OCTREE_SIZE_SCALE; //FIXME remove TREE_SCALE;
 static int renderedCount = 0;
 static int lastRenderedCount = 0;
 bool LODManager::getUseAcuity() { return lodPreference.get() == (int)LODManager::LODPreference::acuity; }
@@ -250,10 +251,11 @@ int LODManager::getRenderedCount() {
     return lastRenderedCount;
 }
 QString LODManager::getLODStatsRenderText() {
-    const QString label = "Rendered objects: ";
-    return label + QString::number(getRenderedCount()) + " w/in " + QString::number((int)getRenderDistance()) + "m";
+    //const QString label = "Rendered objects: ";
+    //return label + QString::number(getRenderedCount()) + " w/in " + QString::number((int)getRenderDistance()) + "m";
+    return getLODFeedbackText(); //fixme
 }
-// compare audoAdjustLOD()
+// compare autoAdjustLOD()
 void LODManager::updatePIDRenderDistance(float targetFps, float measuredFps, float deltaTime, bool isThrottled) {
     float distance;
     if (!isThrottled) {
@@ -268,7 +270,12 @@ void LODManager::updatePIDRenderDistance(float targetFps, float measuredFps, flo
         distance = 1.0f / _renderDistanceController.getControlledValueLowLimit();
     }
     _renderDistanceAverage.updateAverage(distance);
-    renderDistance = _renderDistanceAverage.getAverage(); // average only once per cycle
+    float proposed = _renderDistanceAverage.getAverage();
+    const float DEADBAND = 0.0f; //fixme remove?
+    if (fabsf(proposed - renderDistance) > DEADBAND) {
+        renderDistance = proposed; // fixme _renderDistanceAverage.getAverage(); // average only once per cycle
+        _octreeSizeScale = proposed * 400; // fixme integrate by killing separate renderDistance
+    }
     lastRenderedCount = renderedCount;
     renderedCount = 0;
 }
@@ -276,13 +283,13 @@ void LODManager::updatePIDRenderDistance(float targetFps, float measuredFps, flo
 bool LODManager::shouldRender(const RenderArgs* args, const AABox& bounds) {
     float distanceToCamera = glm::length(bounds.calcCenter() - args->_viewFrustum->getPosition());
     float largestDimension = bounds.getLargestDimension();
-    if (!getUseAcuity()) {
+    /* FIXME remove if (!getUseAcuity()) {
         const float scenerySize = 300; // meters
         bool isRendered = (largestDimension > scenerySize) || // render scenery regardless of distance
-            (distanceToCamera < renderDistance + largestDimension);
+        (distanceToCamera < renderDistance + largestDimension);
         renderedCount += isRendered ? 1 : 0;
         return isRendered;
-    }
+        }*/
 
     const float maxScale = (float)TREE_SCALE;
     const float octreeToMeshRatio = 4.0f; // must be this many times closer to a mesh than a voxel to see it.
@@ -296,16 +303,16 @@ bool LODManager::shouldRender(const RenderArgs* args, const AABox& bounds) {
         float SMALLEST_SCALE_IN_TABLE = 0.001f; // 1mm is plenty small
         float scale = maxScale;
         float factor = 1.0f;
-        
+
         while (scale > SMALLEST_SCALE_IN_TABLE) {
             scale /= 2.0f;
             factor /= 2.0f;
             shouldRenderTable[scale] = factor;
         }
-        
+
         shouldRenderTableNeedsBuilding = false;
     }
-    
+
     float closestScale = maxScale;
     float visibleDistanceAtClosestScale = visibleDistanceAtMaxScale;
     QMap<float, float>::const_iterator lowerBound = shouldRenderTable.lowerBound(largestDimension);
@@ -313,13 +320,15 @@ bool LODManager::shouldRender(const RenderArgs* args, const AABox& bounds) {
         closestScale = lowerBound.key();
         visibleDistanceAtClosestScale = visibleDistanceAtMaxScale * lowerBound.value();
     }
-    
+
     if (closestScale < largestDimension) {
         visibleDistanceAtClosestScale *= 2.0f;
     }
 
-    return distanceToCamera <= visibleDistanceAtClosestScale;
-};
+    bool isRendered = distanceToCamera <= visibleDistanceAtClosestScale;
+    renderedCount += isRendered ? 1 : 0;
+    return isRendered;
+}
 
 // TODO: This is essentially the same logic used to render octree cells, but since models are more detailed then octree cells
 //       I've added a voxelToModelRatio that adjusts how much closer to a model you have to be to see it.

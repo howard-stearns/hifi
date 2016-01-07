@@ -2999,7 +2999,7 @@ void Application::update(float deltaTime) {
     if (DependencyManager::get<LODManager>()->getUseAcuity()) {
         updateLOD();
     } else {
-        DependencyManager::get<LODManager>()->updatePIDRenderDistance(getTargetFrameRate(), getLastInstanteousFps(), deltaTime, isThrottleRendering());
+        DependencyManager::get<LODManager>()->updatePIDRenderDistance(getTargetFrameRate(), getLastUnsynchronizedFps(), deltaTime, isThrottleRendering());
     }
 
     {
