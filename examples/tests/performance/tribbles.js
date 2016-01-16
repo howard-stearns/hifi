@@ -9,13 +9,14 @@ var Vec3, Quat, MyAvatar, Entities, Camera, Script, print;
 //  See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
 //
 //  Drops a bunch of physical spheres in front of you, each running a script that will:
-//  * Edit color at EDIT_RATE for EDIT_TIMEOUT (or not at all if EDIT_TIMEOUT is zero).
-//  * Randomly move at an average of MOVE_RATE for MOVE_TIMEOUT (or not at all if MOVE_TIMEOUT is zero).
+//  * Edit color at EDIT_RATE for EDIT_TIMEOUT.
+//  * Randomly move at an average of MOVE_RATE for MOVE_TIMEOUT.
+//  The _TIMEOUT parameters can be 0 for no activity, and -1 to be active indefinitely.
 //
 
 var NUMBER_TO_CREATE = 3;
-var LIFETIME = 60; // seconds
-var EDIT_RATE = 60; // hz
+var LIFETIME = 20; // seconds
+var EDIT_RATE = 1; //fixme 60; // hz
 var EDIT_TIMEOUT = LIFETIME;
 var MOVE_RATE = 1; // hz
 var MOVE_TIMEOUT = LIFETIME / 2;
@@ -64,12 +65,17 @@ Script.setInterval(function () {
         Script.stop();
     }
 
-    var i, position, numToCreate = RATE_PER_SECOND * (SCRIPT_INTERVAL / 1000.0);
-    var parameters = JSON.stringify({moveTimeout: MOVE_TIMEOUT});
+    var i, numToCreate = RATE_PER_SECOND * (SCRIPT_INTERVAL / 1000.0);
+    var parameters = JSON.stringify({
+        moveTimeout: MOVE_TIMEOUT,
+        moveRate: MOVE_RATE,
+        editTimeout: EDIT_TIMEOUT,
+        editRate: EDIT_RATE
+    });
     print(parameters);
     for (i = 0; (i < numToCreate) && (totalCreated < NUMBER_TO_CREATE); i++) {
         Entities.addEntity({
-	    userData: parameters,
+            userData: parameters,
             type: TYPE,
             name: "tribble-" + totalCreated,
             position: Vec3.sum(center, randomVector({ x: RANGE, y: RANGE, z: RANGE })),
@@ -82,7 +88,7 @@ Script.setInterval(function () {
             gravity: GRAVITY,
             collisionsWillMove: true,
             lifetime: LIFETIME,
-            script: "http://howard-stearns.github.io/models/scripts/load/entityScriptTribble.js" // fixme
+            script: "file:///users/howardstearns/models/scripts/load/entityScriptTribble.js" //"http://howard-stearns.github.io/models/scripts/load/entityScriptTribble.js" // fixme
         });
 
         totalCreated++;

@@ -1,6 +1,6 @@
 "use strict";
 /*jslint nomen: true, plusplus: true, vars: true*/
-var Entities, Script, print, Vec3;
+var Entities, Script, print, Vec3, MyAvatar, Camera, Quat;
 //
 //  Created by Howard Stearns
 //  Copyright 2016 High Fidelity, Inc.
@@ -8,16 +8,19 @@ var Entities, Script, print, Vec3;
 //  Distributed under the Apache License, Version 2.0.
 //  See the accompanying file LICENSE or http://www.apache.org/licenses/LICENSE-2.0.html
 //
-//  Creates a rectangular matrix of objects in front of you with no physical or entity changes after creation.
+//  Creates a rectangular matrix of objects with no physical or entity changes after creation.
 //  Useful for testing the rendering, LOD, and octree storage aspects of the system.
 //
 
-var SIZE = 1;
-var SEPARATION = 10;
-var ROWS_X = 10; 
+var LIFETIME = 15;
+// Matrix will be axis-aligned, approximately all in this field of view.
+// As special case, if zero, grid is centered above your head.
+var MINIMUM_VIEW_ANGLE_IN_RADIANS = 30 * Math.PI / 180;
+var ROWS_X = 10;
 var ROWS_Y = 10;
 var ROWS_Z = 10;
-var LIFETIME = 15;
+var SEPARATION = 10;
+var SIZE = 1;
 var TYPES_TO_USE = [ // Entities will be populated from this list set by the script writer for different tests.
     'Box',
     'Sphere',
@@ -36,9 +39,6 @@ var RATE_PER_SECOND = 1000;    // The entity server will drop data if we create 
 var SCRIPT_INTERVAL = 100;
 
 var ALLOWED_TYPES = ['Box', 'Sphere', 'Light', 'ParticleEffect', 'Web']; // otherwise assumed to be a model url
-// Matrix will be axis-aligned, approximately all in this field of view.
-// As special case, if zero, grid is centered above your head.
-var MINIMUM_VIEW_ANGLE_IN_RADIANS = 30 * Math.PI/180;
 
 var x = 0;
 var y = 0;
@@ -50,8 +50,8 @@ var centered = !MINIMUM_VIEW_ANGLE_IN_RADIANS;
 var approximateNearDistance = !centered &&
     Math.max(xDim, 2 * yDim, zDim) / (2 * Math.tan(MINIMUM_VIEW_ANGLE_IN_RADIANS / 2)); // matrix is up, not vertically centered
 var o = Vec3.sum(MyAvatar.position,
-		 Vec3.sum({x: xDim / -2, y: 0, z: zDim / -2},
-			  centered ? {x: 0, y: SEPARATION, z: 0} : Vec3.multiply(approximateNearDistance, Quat.getFront(Camera.orientation))));
+                 Vec3.sum({x: xDim / -2, y: 0, z: zDim / -2},
+                          centered ? {x: 0, y: SEPARATION, z: 0} : Vec3.multiply(approximateNearDistance, Quat.getFront(Camera.orientation))));
 var totalCreated = 0;
 var startTime = new Date();
 var totalToCreate = ROWS_X * ROWS_Y * ROWS_Z;
@@ -80,28 +80,28 @@ Script.setInterval(function () {
         };
         if (isModel) {
             properties.modelURL = type;
-	} else if (type === 'Web') {
-	    properties.sourceUrl = 'https://highfidelity.com';
+        } else if (type === 'Web') {
+            properties.sourceUrl = 'https://highfidelity.com';
         } else {
             properties.color = { red: x / ROWS_X * 255, green: y / ROWS_Y * 255, blue: z / ROWS_Z * 255 };
-	    if (type === 'ParticleEffect') {
-		properties.emitOrientation = Quat.fromPitchYawRollDegrees(-90.0, 0.0, 0.0);
-		properties.particleRadius = 0.04;
-		properties.radiusSpread = 0.0;
-		properties.emitRate = 100;
-		properties.emitSpeed = 1;
-		properties.speedSpread = 0.0;
-		properties.emitAcceleration = { x: 0.0, y: -0.3, z: 0.0 };
-		properties.accelerationSpread = { x: 0.0, y: 0.0, z: 0.0 };
-		properties.textures = "https://hifi-public.s3.amazonaws.com/alan/Particles/Particle-Sprite-Smoke-1.png";
-		properties.lifespan = 5.0;
-		properties.colorStart = properties.color;
+            if (type === 'ParticleEffect') {
+                properties.emitOrientation = Quat.fromPitchYawRollDegrees(-90.0, 0.0, 0.0);
+                properties.particleRadius = 0.04;
+                properties.radiusSpread = 0.0;
+                properties.emitRate = 100;
+                properties.emitSpeed = 1;
+                properties.speedSpread = 0.0;
+                properties.emitAcceleration = { x: 0.0, y: -0.3, z: 0.0 };
+                properties.accelerationSpread = { x: 0.0, y: 0.0, z: 0.0 };
+                properties.textures = "https://hifi-public.s3.amazonaws.com/alan/Particles/Particle-Sprite-Smoke-1.png";
+                properties.lifespan = 5.0;
+                properties.colorStart = properties.color;
                 properties.colorFinish = properties.color;
                 properties.alphaFinish = 0.0;
                 properties.polarFinish = 2.0 * Math.PI / 180;
-	    } else if (type === 'Light') {
-		properties.dimensions = Vec3.multiply(SEPARATION, properties.position);
-	    }
+            } else if (type === 'Light') {
+                properties.dimensions = Vec3.multiply(SEPARATION, properties.position);
+            }
         }
         Entities.addEntity(properties);
         totalCreated++;
