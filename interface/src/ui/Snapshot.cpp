@@ -140,13 +140,18 @@ QFile* Snapshot::savedFileForSnapshot(QImage & shot, bool isTemporary) {
 void Snapshot::post(QString fileName) {
     // It would be nice to just send all the info to the browser to upload, but browsers are
     // designed to not allow uploading without user intervention, and we don't want to bother the user with that.
-    // So do the upload here. Note that we have to do the upload before showing the Web page anyway, because any sharing
-    // might cause Facebook to immediately scrape the corresponding server page, so the data had better already be there.
+    // So do the upload here. Note that:
+    // 1. The browser display of the already uploaded data (with the sharing buttons) must be in a browser that
+    //    allows Facebook login popups and retention of Facebook cookies.
+    // 2. The file must be already uploaded before that browser display, because any sharing might cause Facebook
+    //    to immediately scrape the corresponding server page, so the data had better already be there.
 
     DataServerAccountInfo& info = AccountManager::getInstance().getAccountInfo();
     auto addressManager = DependencyManager::get<AddressManager>();
-    int time = 1448219630000; // fixme
-    QString id = "123"; // fixme
+    QString timeString = QString::number(QDateTime::currentMSecsSinceEpoch());
+    // IWBNI if every entity had a unique id (e.g., from marketplace) so that Likes can acrue regardless of context.
+    // But for now, just separate entities without central/round-trip coordination by hashing username + timestring
+    QString id = "123"; // fixme QCryptographicHash
     const QString base = "http://localhost:3000";
 
     // It's a shame that QT post is so awkward.
@@ -164,7 +169,7 @@ void Snapshot::post(QString fileName) {
 
     QHttpPart timestamp;
     timestamp.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant("form-data; name=\"timestamp\""));
-    timestamp.setBody(QString::number(time).toUtf8());
+    timestamp.setBody(timeString.toUtf8());
     multiPart->append(timestamp);
 
     QFile* file = new QFile(fileName);
@@ -190,7 +195,7 @@ void Snapshot::post(QString fileName) {
             qCWarning(interfaceapp) << "Snapshot upload failed:" <<
             reply->attribute(QNetworkRequest::HttpReasonPhraseAttribute).toString();  // our server gives a nice http status text.
         } else {
-            qApp->openUrl(QUrl(base + "/share/" + id));
+            qApp->openUrl(QUrl(base + "/share/" + id)); // Now that it's uploaded, give the user the opportunity to share/edit.
         }
         reply->deleteLater();
     });
