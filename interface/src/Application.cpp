@@ -4642,7 +4642,6 @@ void Application::toggleLogDialog() {
         _logDialog->show();
     }
 }
-
 void Application::takeSnapshot() {
     QMediaPlayer* player = new QMediaPlayer();
     QFileInfo inf = QFileInfo(PathUtils::resourcesPath() + "sounds/snap.wav");
@@ -4655,11 +4654,7 @@ void Application::takeSnapshot() {
     if (!accountManager.isLoggedIn()) {
         return;
     }
-
-    if (!_snapshotShareDialog) {
-        _snapshotShareDialog = new SnapshotShareDialog(fileName, _glWidget);
-    }
-    _snapshotShareDialog->show();
+    Snapshot::post(fileName);
 }
 
 float Application::getRenderResolutionScale() const {

@@ -128,4 +128,74 @@ QFile* Snapshot::savedFileForSnapshot(QImage & shot, bool isTemporary) {
     }
 }
 
+#include <QFile> // fixme
+#include <QHttpMultiPart>
+#include "InterfaceLogging.h"
+#include "DependencyManager.h"
+#include "AddressManager.h"
+
+
+// Post the file and metadata to our server, and then bring up a page (from our server) that
+// allows the user to ammend the text description and/or share on Facebook.
+void Snapshot::post(QString fileName) {
+    // It would be nice to just send all the info to the browser to upload, but browsers are
+    // designed to not allow uploading without user intervention, and we don't want to bother the user with that.
+    // So do the upload here. Note that we have to do the upload before showing the Web page anyway, because any sharing
+    // might cause Facebook to immediately scrape the corresponding server page, so the data had better already be there.
+
+    DataServerAccountInfo& info = AccountManager::getInstance().getAccountInfo();
+    auto addressManager = DependencyManager::get<AddressManager>();
+    int time = 1448219630000; // fixme
+    QString id = "123"; // fixme
+    const QString base = "http://localhost:3000";
+
+    // It's a shame that QT post is so awkward.
+    QHttpMultiPart* multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+
+    QHttpPart submitter;
+    submitter.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant("form-data; name=\"submitter\""));
+    submitter.setBody(info.getUsername().toUtf8());
+    multiPart->append(submitter);
+
+    QHttpPart location;
+    location.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant("form-data; name=\"location\""));
+    location.setBody(addressManager->currentAddress().toString().toUtf8());
+    multiPart->append(location);
+
+    QHttpPart timestamp;
+    timestamp.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant("form-data; name=\"timestamp\""));
+    timestamp.setBody(QString::number(time).toUtf8());
+    multiPart->append(timestamp);
+
+    QFile* file = new QFile(fileName);
+    file->open(QIODevice::ReadOnly);
+    QHttpPart imagePart;
+    imagePart.setHeader(QNetworkRequest::ContentTypeHeader, QVariant("image/jpeg"));
+    imagePart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                        QVariant("form-data; name=\"file\"; filename=\"" + file->fileName() +"\""));
+    imagePart.setBodyDevice(file);
+    file->setParent(multiPart); // we cannot delete the file now, so delete it with the multiPart
+    multiPart->append(imagePart);
+    
+    const QUrl url(base + "/test/" + id);
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::UserAgentHeader, HIGH_FIDELITY_USER_AGENT);
+
+    QNetworkReply* reply = NetworkAccessManager::getInstance().post(request, multiPart);
+    QEventLoop loop;
+    loop.connect(reply, &QNetworkReply::finished, [&]() {
+        QVariant statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+        int status = statusCode.isValid() ? statusCode.toInt() : 500;
+        if (status != 200) {
+            qCWarning(interfaceapp) << "Snapshot upload failed:" <<
+            reply->attribute(QNetworkRequest::HttpReasonPhraseAttribute).toString();  // our server gives a nice http status text.
+        } else {
+            qApp->openUrl(QUrl(base + "/share/" + id));
+        }
+        reply->deleteLater();
+    });
+
+    loop.connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+    loop.exec();
+}
 
