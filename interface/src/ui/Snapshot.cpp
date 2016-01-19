@@ -148,10 +148,15 @@ void Snapshot::post(QString fileName) {
 
     DataServerAccountInfo& info = AccountManager::getInstance().getAccountInfo();
     auto addressManager = DependencyManager::get<AddressManager>();
+    QByteArray username = info.getUsername().toUtf8();
     QString timeString = QString::number(QDateTime::currentMSecsSinceEpoch());
+    QByteArray timeData = timeString.toUtf8();
     // IWBNI if every entity had a unique id (e.g., from marketplace) so that Likes can acrue regardless of context.
     // But for now, just separate entities without central/round-trip coordination by hashing username + timestring
-    QString id = "123"; // fixme QCryptographicHash
+    QCryptographicHash hasher(QCryptographicHash::Sha224); // When we do get unique ids, we'll want them to be this big to avoid masking attacks.
+    hasher.addData(username);
+    hasher.addData(timeData);
+    QString id = hasher.result().toHex();  // hex rather than base64 to allow ids to be stored in a case-insensitive file system
     const QString base = "http://localhost:3000";
 
     // It's a shame that QT post is so awkward.
@@ -159,7 +164,7 @@ void Snapshot::post(QString fileName) {
 
     QHttpPart submitter;
     submitter.setHeader(QNetworkRequest::ContentDispositionHeader, QVariant("form-data; name=\"submitter\""));
-    submitter.setBody(info.getUsername().toUtf8());
+    submitter.setBody(username);
     multiPart->append(submitter);
 
     QHttpPart location;
