@@ -14,7 +14,7 @@ Entities.addEntity({
             angularDamping: 0.5,
             gravity: {x: 0, y: -9.8, z: 0},
             collisionsWillMove: true,
-            script: "file:///yourSandbox/examples/entityScripts/keepAway.js"
+            script: "http://howard-stearns.github.io/models/scripts/load/keepAway.js"
         })
     */
 
