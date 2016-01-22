@@ -14,8 +14,8 @@ var Vec3, Quat, MyAvatar, Entities, Camera, Script, print;
 //  The _TIMEOUT parameters can be 0 for no activity, and -1 to be active indefinitely.
 //
 
-var NUMBER_TO_CREATE = 1; // FIXME
-var LIFETIME = 30; // FIXME 60; // seconds
+var NUMBER_TO_CREATE = 120;
+var LIFETIME = 60; // seconds
 var EDIT_RATE = 60; // hz
 var EDIT_TIMEOUT = -1;
 var MOVE_RATE = 1; // hz
@@ -87,11 +87,7 @@ Script.setInterval(function () {
             gravity: GRAVITY,
             collisionsWillMove: true,
             lifetime: LIFETIME,
-            //script: "https://s3.amazonaws.com/hifi-public/scripts/entityScripts/tribble.js"
-            //script: "https://raw.githubusercontent.com/howard-stearns/models/gh-pages/scripts/load/entityScriptTribble.3.js"
-            //script: "file:///Users/howardstearns/models/scripts/load/entityScriptTribble.15.js"
-            //script: "file:///users/howardstearns/howardHiFi/examples/entityScripts/tribble.js"
-            script: "http://howard-stearns.github.io/models/scripts/load/tribble.js"
+            script: Script.resolvePath("../../entityScripts/tribbleOwner.js")
         });
 
         totalCreated++;
