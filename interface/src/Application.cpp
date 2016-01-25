@@ -4230,14 +4230,9 @@ void Application::setSessionUUID(const QUuid& sessionUUID) {
 
 bool Application::askToSetAvatarUrl(const QString& url) {
     QUrl realUrl(url);
-    if (realUrl.isLocalFile()) {
+    if (true /*realUrl.isLocalFile()*/) {
         QString message = "You can not use local files for avatar components.";
-
-        QMessageBox msgBox;
-        msgBox.setText(message);
-        msgBox.setStandardButtons(QMessageBox::Ok);
-        msgBox.setIcon(QMessageBox::Warning);
-        msgBox.exec();
+        OffscreenUi::warning("", message);
         return false;
     }
 
