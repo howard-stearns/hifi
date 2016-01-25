@@ -95,9 +95,11 @@
 #include <PathUtils.h>
 #include <PerfStat.h>
 #include <PhysicsEngine.h>
+#include <PhysicsHelpers.h>
 #include <plugins/PluginContainer.h>
 #include <plugins/PluginManager.h>
 #include <RenderableWebEntityItem.h>
+#include <RenderShadowTask.h>
 #include <RenderDeferredTask.h>
 #include <ResourceCache.h>
 #include <RenderScriptingInterface.h>
@@ -115,6 +117,7 @@
 #include <recording/Deck.h>
 #include <recording/Recorder.h>
 #include <QmlWebWindowClass.h>
+#include <Preferences.h>
 
 #include "AnimDebugDraw.h"
 #include "AudioClient.h"
@@ -322,6 +325,7 @@ bool setupEssentials(int& argc, char** argv) {
 
     // Set dependencies
     DependencyManager::set<ScriptEngines>();
+    DependencyManager::set<Preferences>();
     DependencyManager::set<recording::Deck>();
     DependencyManager::set<recording::Recorder>();
     DependencyManager::set<AddressManager>();
@@ -672,7 +676,9 @@ Application::Application(int& argc, char** argv, QElapsedTimer& startupTimer) :
     initializeGL();
 
     // Start rendering
-    _renderEngine->addTask(make_shared<RenderDeferredTask>(LODManager::shouldRender));
+    render::CullFunctor cullFunctor = LODManager::shouldRender;
+    _renderEngine->addTask(make_shared<RenderShadowTask>(cullFunctor));
+    _renderEngine->addTask(make_shared<RenderDeferredTask>(cullFunctor));
     _renderEngine->registerScene(_main3DScene);
 
     _offscreenContext->makeCurrent();
@@ -1171,13 +1177,14 @@ void Application::initializeGL() {
 
     InfoView::show(INFO_HELP_PATH, true);
 }
-
+extern void setupPreferences();
 void Application::initializeUi() {
     AddressBarDialog::registerType();
     ErrorDialog::registerType();
     LoginDialog::registerType();
     Tooltip::registerType();
     UpdateDialog::registerType();
+    qmlRegisterType<Preference>("Hifi", 1, 0, "Preference");
 
     auto offscreenUi = DependencyManager::get<OffscreenUi>();
     offscreenUi->create(_offscreenContext->getContext());
@@ -1197,6 +1204,8 @@ void Application::initializeUi() {
         qApp->quit();
     });
 
+    setupPreferences();
+
     // For some reason there is already an "Application" object in the QML context, 
     // though I can't find it. Hence, "ApplicationInterface"
     rootContext->setContextProperty("ApplicationInterface", this); 
@@ -1207,6 +1216,7 @@ void Application::initializeUi() {
     rootContext->setContextProperty("MyAvatar", getMyAvatar());
     rootContext->setContextProperty("Messages", DependencyManager::get<MessagesClient>().data());
     rootContext->setContextProperty("Recording", DependencyManager::get<RecordingScriptingInterface>().data());
+    rootContext->setContextProperty("Preferences", DependencyManager::get<Preferences>().data());
 
     rootContext->setContextProperty("TREE_SCALE", TREE_SCALE);
     rootContext->setContextProperty("Quat", new Quat());
@@ -1826,6 +1836,12 @@ void Application::keyPressEvent(QKeyEvent* event) {
                     }
                 } else {
                     Menu::getInstance()->triggerOption(MenuOption::AddressBar);
+                }
+                break;
+
+            case Qt::Key_X:
+                if (isShifted && isMeta) {
+                    // placeholder for dialogs being converted to QML.
                 }
                 break;
 
@@ -3089,13 +3105,14 @@ void Application::update(float deltaTime) {
             static VectorOfMotionStates motionStates;
             _entitySimulation.getObjectsToRemoveFromPhysics(motionStates);
             _physicsEngine->removeObjects(motionStates);
+            _entitySimulation.deleteObjectsRemovedFromPhysics();
 
-            getEntities()->getTree()->withWriteLock([&] {
+            getEntities()->getTree()->withReadLock([&] {
                 _entitySimulation.getObjectsToAddToPhysics(motionStates);
                 _physicsEngine->addObjects(motionStates);
 
             });
-            getEntities()->getTree()->withWriteLock([&] {
+            getEntities()->getTree()->withReadLock([&] {
                 _entitySimulation.getObjectsToChange(motionStates);
                 VectorOfMotionStates stillNeedChange = _physicsEngine->changeObjects(motionStates);
                 _entitySimulation.setObjectsToChange(stillNeedChange);
@@ -3125,7 +3142,7 @@ void Application::update(float deltaTime) {
             PerformanceTimer perfTimer("havestChanges");
             if (_physicsEngine->hasOutgoingChanges()) {
                 getEntities()->getTree()->withWriteLock([&] {
-                    _entitySimulation.handleOutgoingChanges(_physicsEngine->getOutgoingChanges(), _physicsEngine->getSessionID());
+                    _entitySimulation.handleOutgoingChanges(_physicsEngine->getOutgoingChanges(), Physics::getSessionUUID());
                     avatarManager->handleOutgoingChanges(_physicsEngine->getOutgoingChanges());
                 });
 
@@ -3758,9 +3775,10 @@ void Application::displaySide(RenderArgs* renderArgs, Camera& theCamera, bool se
         renderContext.setArgs(renderArgs);
 
         bool occlusionStatus = Menu::getInstance()->isOptionChecked(MenuOption::DebugAmbientOcclusion);
+        bool shadowStatus = Menu::getInstance()->isOptionChecked(MenuOption::DebugShadows);
         bool antialiasingStatus = Menu::getInstance()->isOptionChecked(MenuOption::Antialiasing);
         bool showOwnedStatus = Menu::getInstance()->isOptionChecked(MenuOption::PhysicsShowOwned);
-        renderContext.setOptions(occlusionStatus, antialiasingStatus, showOwnedStatus);
+        renderContext.setOptions(occlusionStatus, antialiasingStatus, showOwnedStatus, shadowStatus);
 
         _renderEngine->setRenderContext(renderContext);
 
@@ -4225,6 +4243,9 @@ bool Application::acceptURL(const QString& urlString, bool defaultUpload) {
 }
 
 void Application::setSessionUUID(const QUuid& sessionUUID) {
+    // HACK: until we swap the library dependency order between physics and entities
+    // we cache the sessionID in two distinct places for physics.
+    Physics::setSessionUUID(sessionUUID); // TODO: remove this one
     _physicsEngine->setSessionUUID(sessionUUID);
 }
 
@@ -4526,22 +4547,8 @@ void Application::loadDialog() {
 }
 
 void Application::loadScriptURLDialog() {
-    // To be migratd to QML
-    QInputDialog scriptURLDialog(getWindow());
-    scriptURLDialog.setWindowTitle("Open and Run Script URL");
-    scriptURLDialog.setLabelText("Script:");
-    scriptURLDialog.setWindowFlags(Qt::Sheet);
-    const float DIALOG_RATIO_OF_WINDOW = 0.30f;
-    scriptURLDialog.resize(scriptURLDialog.parentWidget()->size().width() * DIALOG_RATIO_OF_WINDOW,
-                        scriptURLDialog.size().height());
-
-    int dialogReturn = scriptURLDialog.exec();
-    QString newScript;
-    if (dialogReturn == QDialog::Accepted) {
-        if (scriptURLDialog.textValue().size() > 0) {
-            // the user input a new hostname, use that
-            newScript = scriptURLDialog.textValue();
-        }
+    auto newScript = OffscreenUi::getText(nullptr, "Open and Run Script", "Script URL");
+    if (!newScript.isEmpty()) {
         DependencyManager::get<ScriptEngines>()->loadScript(newScript);
     }
 }

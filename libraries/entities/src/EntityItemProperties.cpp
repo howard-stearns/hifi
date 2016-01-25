@@ -160,8 +160,8 @@ QString EntityItemProperties::getCollisionMaskAsString() const {
 void EntityItemProperties::setCollisionMaskFromString(const QString& maskString) {
     QVector<QStringRef> groups = maskString.splitRef(',');
     uint8_t mask = 0x00;
-    for (auto group : groups) {
-        mask |= getCollisionGroupAsBitMask(group);
+    for (auto groupName : groups) {
+        mask |= getCollisionGroupAsBitMask(groupName);
     }
     _collisionMask = mask;
     _collisionMaskChanged = true;
@@ -185,10 +185,10 @@ void EntityItemProperties::setShapeTypeFromString(const QString& shapeName) {
 }
 
 using BackgroundPair = std::pair<const BackgroundMode, const QString>;
-const std::array<BackgroundPair, BACKGROUND_MODE_ITEM_COUNT> BACKGROUND_MODES = {
+const std::array<BackgroundPair, BACKGROUND_MODE_ITEM_COUNT> BACKGROUND_MODES = { {
     BackgroundPair { BACKGROUND_MODE_INHERIT, { "inherit" } },
     BackgroundPair { BACKGROUND_MODE_SKYBOX, { "skybox" } }
-};
+} };
 
 QString EntityItemProperties::getBackgroundModeAsString() const {
     return BACKGROUND_MODES[_backgroundMode].second;
