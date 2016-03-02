@@ -34,6 +34,7 @@ function makeCards(n) { // Make a deck of n cards, which must separately then be
             type: 'Box',
             dimensions: cardDimensions,
             density: density,
+            registrationPoint: {x: 0, y: 0, z: 0},
             dynamic: 1,
             color: colors[i % colors.length]
             // TODO: replace above with the correct form of below
@@ -66,8 +67,8 @@ function stackCards(position, rotation, optionalIncrementalRotationInDegrees) {
             thisRotation = Quat.multiply(Quat.angleAxis(angle, Quat.getFront(rotation)), rotation);
             angle += optionalIncrementalRotationInDegrees;
         }
-        position = Vec3.sum(anchor, Vec3.sum(Vec3.multiply(cardDimensions.x / 2, Quat.getRight(thisRotation)),
-                                             Vec3.multiply(cardDimensions.y / 2, Quat.getUp(thisRotation))));
+        //position = Vec3.sum(anchor, Vec3.sum(Vec3.multiply(cardDimensions.x / 2, Quat.getRight(thisRotation)),
+        //                                     Vec3.multiply(cardDimensions.y / 2, Quat.getUp(thisRotation))));
         Entities.editEntity(card, {
             position: position,
             rotation: thisRotation,
@@ -77,8 +78,8 @@ function stackCards(position, rotation, optionalIncrementalRotationInDegrees) {
             dynamic: 0
         });
         //debug("stacked",  card, position, thisRotation);
-        //position = Vec3.sum(position, offset);
-        anchor = Vec3.sum(anchor, offset);
+        position = Vec3.sum(position, offset);
+        //anchor = Vec3.sum(anchor, offset);
     });
     cards.forEach(function (card) { Entities.editEntity(card, {dynamic: 1}); }); // Turn physics on again.
 }
