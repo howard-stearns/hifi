@@ -11,7 +11,7 @@
 var cardDimensions = {x: 0.0635, y: 0.0889, z: 0.0003};
 var cardWeight = 0.0022;
 
-var colors = [
+var colors = [  // TODO: remove when we get card models. See below
     {red: 255, green: 0, blue: 0},
     {red: 0, green: 255, blue: 0},
     {red: 0, green: 0, blue: 255},
@@ -36,6 +36,9 @@ function makeCards(n) { // Make a deck of n cards, which must separately then be
             density: density,
             dynamic: 1,
             color: colors[i % colors.length]
+            // TODO: replace above with the correct form of below
+            //modelURL: "whatever" + i,
+            //shapeType: 'Box'
         });
         debug("Created", card, Entities.getEntityProperties(card).position);
         cards.push(card);
@@ -61,7 +64,6 @@ function stackCards(position, rotation, optionalIncrementalRotationInDegrees) {
         var thisRotation = rotation;
         if (optionalIncrementalRotationInDegrees) {
             thisRotation = Quat.multiply(Quat.angleAxis(angle, Quat.getFront(rotation)), rotation);
-            debug('angle', angle, 'front', Quat.getFront(thisRotation), 'right', Quat.getRight(thisRotation));
             angle += optionalIncrementalRotationInDegrees;
         }
         position = Vec3.sum(anchor, Vec3.sum(Vec3.multiply(cardDimensions.x / 2, Quat.getRight(thisRotation)),
@@ -69,11 +71,16 @@ function stackCards(position, rotation, optionalIncrementalRotationInDegrees) {
         Entities.editEntity(card, {
             position: position,
             rotation: thisRotation,
+            // The randomness in physics can keep these from settling after spread. This keeps them still.
+            velocity: Vec3.ZERO,
+            angularVelocity: Vec3.ZERO,
+            dynamic: 0
         });
         //debug("stacked",  card, position, thisRotation);
         //position = Vec3.sum(position, offset);
         anchor = Vec3.sum(anchor, offset);
     });
+    cards.forEach(function (card) { Entities.editEntity(card, {dynamic: 1}); }); // Turn physics on again.
 }
 // spread cardsInHand, following the initial orientation of the first card.
 function spreadCards(cardsInHand) {
@@ -93,7 +100,7 @@ function beforeMe() {
     return before;
 }
 
-makeCards(7);
-stackCards(beforeMe(), Camera.orientation, -15);
+makeCards(52);
+stackCards(beforeMe(), Camera.orientation, -10);
 
 Script.scriptEnding.connect(cleanupCards);
