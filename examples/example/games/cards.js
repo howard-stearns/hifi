@@ -25,7 +25,7 @@ function debug() { // Display the arguments not just [Object object].
     print.apply(null, [].map.call(arguments, JSON.stringify));
 }
 
-var cards = [];
+var deck = [];
 function makeCards(n) { // Make a deck of n cards, which must separately then be stacked somewhere.
     var i, card, density = cardWeight / (cardDimensions.x * cardDimensions.y * cardDimensions.z);
     for (i = 0; i < n; i++) {
@@ -34,59 +34,51 @@ function makeCards(n) { // Make a deck of n cards, which must separately then be
             type: 'Box',
             dimensions: cardDimensions,
             density: density,
-            registrationPoint: {x: 0, y: 0, z: 0},
             dynamic: 1,
             color: colors[i % colors.length]
-            // TODO: replace above with the correct form of below
+            // TODO: replace above with the correct form of below when we get models.
             //modelURL: "whatever" + i,
             //shapeType: 'Box'
         });
         debug("Created", card, Entities.getEntityProperties(card).position);
-        cards.push(card);
+        deck.push(card);
     }
 }
 function cleanupCards() { // delete 'em all
-    cards.forEach(Entities.deleteEntity);
+    deck.forEach(Entities.deleteEntity);
 }
 // Make a set of cards dynamic, after having made them static.
-// Stack the deck with the first card (of global cards array) at position and rotation.
-// The back of the card faces Quat.getFront(rotation), and the position is adjusted half a card thickness in that direction.
-// Each subsequent card is stacked in the forward direction (on the back of the previous card).
-function stackCards(position, rotation, optionalIncrementalRotationInDegrees) {
-     // The extra gap keeps the cards from touching while we rotate them. Otherwise they'll scatter from friction.
-    var deltaPosition = cardDimensions.z,
-        offset = Vec3.multiply(deltaPosition, Quat.getFront(rotation)),
-        angle = 0,
-        anchor = Vec3.sum(position, Vec3.sum(Vec3.multiply(cardDimensions.x / -2, Quat.getRight(rotation)),
-                                             Vec3.multiply(cardDimensions.y / -2, Quat.getUp(rotation))));
-    position = Vec3.sum(position, Vec3.multiply(0.5 * cardDimensions.z, Quat.getFront(rotation)));
-    debug('position', position, 'anchor', anchor);
+// Stack the deck with the first card (of global cards array) at position and rotation (using registrationPoint).
+// Each subsequent card is stacked in the "forward" direction (on the back of the previous card).
+function spreadCards(cards, position, rotation, optionalIncrementalRotationInDegrees) {
+    var registrationPoint = {x: 0.5, y: 0.5, z: 1.0},   // Front face of card make it easy to set them face down a surface.
+        perpendicular = Quat.getFront(rotation),
+        offset = Vec3.multiply(cardDimensions.z, perpendicular), // Stack each card past the back of the previous
+        rotationalOffset = Quat.angleAxis(optionalIncrementalRotationInDegrees || 0, perpendicular);
+    // It's easiest to get the pinwheel by chaning the registration point. We want left-handed and right-handed people
+    // to play together, so we set the registration point differently for each set of cards in hand.
+    if (optionalIncrementalRotationInDegrees < 0) { // spread clockwise, as though in your left hand
+        registrationPoint = {x: 0, y: 0, z: 1.0};
+    } else if (optionalIncrementalRotationInDegrees > 0) { // spread counterclockwise, as though in your right hand
+        registrationPoint = {x: 1, y: 0, z: 1.0};
+    }
     cards.forEach(function (card) {
-        var thisRotation = rotation;
-        if (optionalIncrementalRotationInDegrees) {
-            thisRotation = Quat.multiply(Quat.angleAxis(angle, Quat.getFront(rotation)), rotation);
-            angle += optionalIncrementalRotationInDegrees;
-        }
-        //position = Vec3.sum(anchor, Vec3.sum(Vec3.multiply(cardDimensions.x / 2, Quat.getRight(thisRotation)),
-        //                                     Vec3.multiply(cardDimensions.y / 2, Quat.getUp(thisRotation))));
+        // TODO: Instead of slamming each card into position, animate each card individually.
         Entities.editEntity(card, {
             position: position,
-            rotation: thisRotation,
+            rotation: rotation,
+            registrationPoint: registrationPoint,
             // The randomness in physics can keep these from settling after spread. This keeps them still.
             velocity: Vec3.ZERO,
             angularVelocity: Vec3.ZERO,
             dynamic: 0
         });
-        //debug("stacked",  card, position, thisRotation);
         position = Vec3.sum(position, offset);
-        //anchor = Vec3.sum(anchor, offset);
+        rotation = Quat.multiply(rotationalOffset, rotation);
     });
     cards.forEach(function (card) { Entities.editEntity(card, {dynamic: 1}); }); // Turn physics on again.
 }
-// spread cardsInHand, following the initial orientation of the first card.
-function spreadCards(cardsInHand) {
-    
-}
+
 
 function myChest() {
     var waist = MyAvatar.position,
@@ -102,6 +94,5 @@ function beforeMe() {
 }
 
 makeCards(52);
-stackCards(beforeMe(), Camera.orientation, -10);
-
+spreadCards(deck, beforeMe(), Camera.orientation);
 Script.scriptEnding.connect(cleanupCards);
