@@ -2,6 +2,12 @@
 /*jslint nomen: true, plusplus: true, vars: true*/
 /*global Vec3, Quat, MyAvatar, Entities, Camera, Script, print */
 
+// Note: We assume that the "front face" of card faces down its own positive z axis,
+// i.e., front faces you when you are in the same orientation, so the BACK is on the card's getFront side.
+// So the card dimensions are:
+//   x = width = positive is to the right as you look at the face of the card
+//   y = height = positive is towards the top of the card
+//   z = thickness = positive is from the back toward the front
 var cardDimensions = {x: 0.0635, y: 0.0889, z: 0.0003};
 var cardWeight = 0.0022;
 
@@ -12,7 +18,6 @@ var colors = [
     {red: 255, green: 255, blue: 0},
     {red: 0, green: 255, blue: 255},
     {red: 255, green: 0, blue: 255},
-    {red: 0, green: 255, blue: 255},
     {red: 128, green: 128, blue: 128}
 ];
 
@@ -21,21 +26,8 @@ function debug() { // Display the arguments not just [Object object].
 }
 
 var cards = [];
-
-function stack(position, rotation) {
-    var offset = Vec3.multiply(cardDimensions.z, Quat.getFront(rotation));
-    cards.forEach(function (card) {
-        Entities.editEntity(card, {
-            position: position,
-            rotation: rotation,
-        });
-        debug("stacked",  card, position);
-        position = Vec3.sum(position, offset);
-    });
-}
-
-function makeDeck() {
-    var n = 52, i, card, density = cardWeight / (cardDimensions.x * cardDimensions.y * cardDimensions.z);
+function makeCards(n) { // Make a deck of n cards, which must separately then be stacked somewhere.
+    var i, card, density = cardWeight / (cardDimensions.x * cardDimensions.y * cardDimensions.z);
     for (i = 0; i < n; i++) {
         card = Entities.addEntity({
             name: 'card-' + i,
@@ -49,9 +41,43 @@ function makeDeck() {
         cards.push(card);
     }
 }
-
-function cleanupCards() {
+function cleanupCards() { // delete 'em all
     cards.forEach(Entities.deleteEntity);
+}
+// Make a set of cards dynamic, after having made them static.
+// Stack the deck with the first card (of global cards array) at position and rotation.
+// The back of the card faces Quat.getFront(rotation), and the position is adjusted half a card thickness in that direction.
+// Each subsequent card is stacked in the forward direction (on the back of the previous card).
+function stackCards(position, rotation, optionalIncrementalRotationInDegrees) {
+     // The extra gap keeps the cards from touching while we rotate them. Otherwise they'll scatter from friction.
+    var deltaPosition = cardDimensions.z,
+        offset = Vec3.multiply(deltaPosition, Quat.getFront(rotation)),
+        angle = 0,
+        anchor = Vec3.sum(position, Vec3.sum(Vec3.multiply(cardDimensions.x / -2, Quat.getRight(rotation)),
+                                             Vec3.multiply(cardDimensions.y / -2, Quat.getUp(rotation))));
+    position = Vec3.sum(position, Vec3.multiply(0.5 * cardDimensions.z, Quat.getFront(rotation)));
+    debug('position', position, 'anchor', anchor);
+    cards.forEach(function (card) {
+        var thisRotation = rotation;
+        if (optionalIncrementalRotationInDegrees) {
+            thisRotation = Quat.multiply(Quat.angleAxis(angle, Quat.getFront(rotation)), rotation);
+            debug('angle', angle, 'front', Quat.getFront(thisRotation), 'right', Quat.getRight(thisRotation));
+            angle += optionalIncrementalRotationInDegrees;
+        }
+        position = Vec3.sum(anchor, Vec3.sum(Vec3.multiply(cardDimensions.x / 2, Quat.getRight(thisRotation)),
+                                             Vec3.multiply(cardDimensions.y / 2, Quat.getUp(thisRotation))));
+        Entities.editEntity(card, {
+            position: position,
+            rotation: thisRotation,
+        });
+        //debug("stacked",  card, position, thisRotation);
+        //position = Vec3.sum(position, offset);
+        anchor = Vec3.sum(anchor, offset);
+    });
+}
+// spread cardsInHand, following the initial orientation of the first card.
+function spreadCards(cardsInHand) {
+    
 }
 
 function myChest() {
@@ -67,7 +93,7 @@ function beforeMe() {
     return before;
 }
 
-makeDeck();
-stack(beforeMe(), Camera.orientation);
+makeCards(7);
+stackCards(beforeMe(), Camera.orientation, -15);
 
 Script.scriptEnding.connect(cleanupCards);
