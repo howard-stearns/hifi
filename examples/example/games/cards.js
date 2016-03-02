@@ -35,13 +35,14 @@ function stack(position, rotation) {
 }
 
 function makeDeck() {
-    var n = 52, i, card;
+    var n = 52, i, card, density = cardWeight / (cardDimensions.x * cardDimensions.y * cardDimensions.z);
     for (i = 0; i < n; i++) {
         card = Entities.addEntity({
             name: 'card-' + i,
             type: 'Box',
             dimensions: cardDimensions,
-            weight: cardWeight,
+            density: density,
+            dynamic: 1,
             color: colors[i % colors.length]
         });
         debug("Created", card, Entities.getEntityProperties(card).position);
