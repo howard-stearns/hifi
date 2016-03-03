@@ -27,7 +27,17 @@ function debug() { // Display the arguments not just [Object object].
 
 var deck = [];
 function makeCards(n) { // Make a deck of n cards, which must separately then be stacked somewhere.
-    var i, card, density = cardWeight / (cardDimensions.x * cardDimensions.y * cardDimensions.z);
+    var i, card, density = cardWeight / (cardDimensions.x * cardDimensions.y * cardDimensions.z),
+	userData = JSON.stringify({
+	    wearable: {
+		joints: {
+		    RightHand: [{x: 0.1, y: 0.1, z: 0.1},
+				Quat.fromPitchYawRollDegrees(90, 90, 30)],
+		    LeftHand: [{x: -0.05, y: 0.15, z: 0.05},
+			       Quat.fromPitchYawRollDegrees(0, 0, 70)]
+		}
+	    }
+	});
     for (i = 0; i < n; i++) {
         card = Entities.addEntity({
             name: 'card-' + i,
@@ -35,6 +45,7 @@ function makeCards(n) { // Make a deck of n cards, which must separately then be
             dimensions: cardDimensions,
             density: density,
             dynamic: 1,
+	    userData: userData,
             color: colors[i % colors.length]
             // TODO: replace above with the correct form of below when we get models.
             //modelURL: "whatever" + i,
