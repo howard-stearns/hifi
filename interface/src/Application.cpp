@@ -695,7 +695,8 @@ Application::Application(int& argc, char** argv, QElapsedTimer& startupTimer) :
     connect(&identityPacketTimer, &QTimer::timeout, getMyAvatar(), &MyAvatar::sendIdentityPacket);
     identityPacketTimer.start(AVATAR_IDENTITY_PACKET_SEND_INTERVAL_MSECS);
 
-    ResourceCache::setRequestLimit(3);
+    int nThreads = QThread::idealThreadCount();
+    ResourceCache::setRequestLimit((nThreads <= 0) ? 3 : nThreads - 2);
 
     _glWidget = new GLCanvas();
     getApplicationCompositor().setRenderingWidget(_glWidget);
