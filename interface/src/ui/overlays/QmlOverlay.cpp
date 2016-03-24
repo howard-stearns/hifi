@@ -51,6 +51,9 @@ void QmlOverlay::buildQmlElement(const QUrl& url) {
 }
 
 QmlOverlay::~QmlOverlay() {
+    if (!_qmlElement) { // e.g., if shutdown while still building.
+        return;
+    }
     _qmlElement.reset();
 }
 
