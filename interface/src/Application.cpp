@@ -273,7 +273,7 @@ public:
             auto now = usecTimestampNow();
             auto lastHeartbeatAge = now - _heartbeat;
             if (lastHeartbeatAge > MAX_HEARTBEAT_AGE_USECS) {
-                deadlockDetectionCrash();
+                //deadlockDetectionCrash();
             }
 #endif
         }
@@ -2734,8 +2734,19 @@ void Application::calibrateEyeTracker5Points() {
 }
 #endif
 
+class EntityDatum { // For parent-first sorting and mapping.
+public:
+    EntityItemPointer item;
+    EntityItemProperties properties;
+    EntityItemID originalParentID;
+    EntityItemID mappedID;
+    EntityDatum() {};
+    EntityDatum(EntityItemPointer itemArg, EntityItemProperties propertiesArg, EntityItemID parentID) : 
+        item(itemArg), properties(propertiesArg), originalParentID(parentID) {
+    };
+ };
 bool Application::exportEntities(const QString& filename, const QVector<EntityItemID>& entityIDs) {
-    QVector<EntityItemPointer> entities;
+    QHash<EntityItemID, EntityDatum> entities;
 
     auto entityTree = getEntities()->getTree();
     auto exportTree = std::make_shared<EntityTree>();
@@ -2750,23 +2761,50 @@ bool Application::exportEntities(const QString& filename, const QVector<EntityIt
 
         auto properties = entityItem->getProperties();
         auto position = properties.getPosition();
-
         root.x = glm::min(root.x, position.x);
         root.y = glm::min(root.y, position.y);
         root.z = glm::min(root.z, position.z);
 
-        entities << entityItem;
+        qCDebug(interfaceapp) << "Exporting" << entityItem->getEntityItemID() << entityItem->getName();
+        entities[entityID] = EntityDatum(entityItem, properties, properties.getParentID());
     }
 
     if (entities.size() == 0) {
         return false;
     }
 
-    for (auto entityItem : entities) {
-        auto properties = entityItem->getProperties();
+    for (EntityDatum& entityDatum : entities) {
+        // Recursively add the parents of entities to the exportTree, mapping their new identifiers as we go.
+        std::function<EntityItemID(EntityDatum&)> getMapped = [&](EntityDatum& datum) {
+            auto originalID = datum.item->getEntityItemID();
+            if (!datum.mappedID.isInvalidID()) {
+                qCDebug(interfaceapp) << "already mapped" << originalID << datum.properties.getName() << "to" << datum.mappedID;
+                return datum.mappedID;  // We are a parent that has already been added/mapped.
+            }
+            auto properties = datum.properties;
+            if (!datum.originalParentID.isInvalidID()) { // Recurse over ancestors, updating properties.
+                qCDebug(interfaceapp) << "FIXME recursing" << datum.originalParentID << "parent of" << datum.item->getEntityItemID();
+                // Warning: this is not a tail-call, so exporting a REALLY deep parent hierarchy will blow the call stack.
+                properties.setParentID(getMapped(entities[datum.originalParentID]));
+            }
+            properties.setPosition(properties.getPosition() - root);
+            auto newEntity = exportTree->addEntity(originalID, properties);
+            datum.mappedID = newEntity->getEntityItemID();
+            qCDebug(interfaceapp) << "mapped" << originalID << properties.getName() << "( parent" << /*datum.originalParentID*/exportTree->findEntityByEntityItemID(originalID)->getProperties().getParentID() << ") to" << datum.mappedID;
+            return datum.mappedID;
+        };
 
-        properties.setPosition(properties.getPosition() - root);
-        exportTree->addEntity(entityItem->getEntityItemID(), properties);
+        getMapped(entityDatum);
+    }
+    for (EntityDatum& entityDatum : entities) {  // FIXME: remove this debugging sandity check
+        auto id = entityDatum.item->getEntityItemID();
+        auto found = entityTree->findEntityByEntityItemID(id);
+        if (!found) {
+            qCDebug(interfaceapp) << "final mapped" << id << "MISSING";
+        } else {
+            auto props = found->getProperties();
+            qCDebug(interfaceapp) << "final mapped" << id << props.getName() << props.getParentID();
+        }
     }
 
     // remap IDs on export so that we aren't publishing the IDs of entities in our domain
