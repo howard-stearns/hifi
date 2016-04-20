@@ -470,8 +470,10 @@ void GLBackend::resetStages() {
 
 #define ADD_COMMAND_GL(call) _commands.push_back(COMMAND_##call); _commandOffsets.push_back(_params.size());
 
-//#define DO_IT_NOW(call, offset) runLastCommand();
-#define DO_IT_NOW(call, offset) 
+#define GET_UNIFORM_LOCATION(shaderUniformLoc) shaderUniformLoc
+// THis will be used in the next PR
+// #define GET_UNIFORM_LOCATION(shaderUniformLoc) _pipeline._programShader->getUniformLocation(shaderUniformLoc)
+
 
 void Batch::_glActiveBindTexture(GLenum unit, GLenum target, GLuint texture) {
     // clean the cache on the texture unit we are going to use so the next call to setResourceTexture() at the same slot works fine
@@ -481,14 +483,11 @@ void Batch::_glActiveBindTexture(GLenum unit, GLenum target, GLuint texture) {
     _params.push_back(texture);
     _params.push_back(target);
     _params.push_back(unit);
-
-
-    DO_IT_NOW(_glActiveBindTexture, 3);
 }
 void GLBackend::do_glActiveBindTexture(Batch& batch, size_t paramOffset) {
     glActiveTexture(batch._params[paramOffset + 2]._uint);
     glBindTexture(
-        batch._params[paramOffset + 1]._uint,
+        GET_UNIFORM_LOCATION(batch._params[paramOffset + 1]._uint),
         batch._params[paramOffset + 0]._uint);
 
     (void) CHECK_GL_ERROR();
@@ -501,8 +500,6 @@ void Batch::_glUniform1i(GLint location, GLint v0) {
     ADD_COMMAND_GL(glUniform1i);
     _params.push_back(v0);
     _params.push_back(location);
-    
-    DO_IT_NOW(_glUniform1i, 1);
 }
 void GLBackend::do_glUniform1i(Batch& batch, size_t paramOffset) {
     if (_pipeline._program == 0) {
@@ -512,7 +509,7 @@ void GLBackend::do_glUniform1i(Batch& batch, size_t paramOffset) {
     }
     updatePipeline();
     glUniform1f(
-        batch._params[paramOffset + 1]._int,
+        GET_UNIFORM_LOCATION(batch._params[paramOffset + 1]._int),
         batch._params[paramOffset + 0]._int);
     (void) CHECK_GL_ERROR();
 }
@@ -524,8 +521,6 @@ void Batch::_glUniform1f(GLint location, GLfloat v0) {
     ADD_COMMAND_GL(glUniform1f);
     _params.push_back(v0);
     _params.push_back(location);
-
-    DO_IT_NOW(_glUniform1f, 1);
 }
 void GLBackend::do_glUniform1f(Batch& batch, size_t paramOffset) {
     if (_pipeline._program == 0) {
@@ -536,7 +531,7 @@ void GLBackend::do_glUniform1f(Batch& batch, size_t paramOffset) {
     updatePipeline();
 
     glUniform1f(
-        batch._params[paramOffset + 1]._int,
+        GET_UNIFORM_LOCATION(batch._params[paramOffset + 1]._int),
         batch._params[paramOffset + 0]._float);
     (void) CHECK_GL_ERROR();
 }
@@ -547,8 +542,6 @@ void Batch::_glUniform2f(GLint location, GLfloat v0, GLfloat v1) {
     _params.push_back(v1);
     _params.push_back(v0);
     _params.push_back(location);
-
-    DO_IT_NOW(_glUniform2f, 1);
 }
 
 void GLBackend::do_glUniform2f(Batch& batch, size_t paramOffset) {
@@ -559,7 +552,7 @@ void GLBackend::do_glUniform2f(Batch& batch, size_t paramOffset) {
     }
     updatePipeline();
     glUniform2f(
-        batch._params[paramOffset + 2]._int,
+        GET_UNIFORM_LOCATION(batch._params[paramOffset + 2]._int),
         batch._params[paramOffset + 1]._float,
         batch._params[paramOffset + 0]._float);
     (void) CHECK_GL_ERROR();
@@ -572,8 +565,6 @@ void Batch::_glUniform3f(GLint location, GLfloat v0, GLfloat v1, GLfloat v2) {
     _params.push_back(v1);
     _params.push_back(v0);
     _params.push_back(location);
-
-    DO_IT_NOW(_glUniform3f, 1);
 }
 
 void GLBackend::do_glUniform3f(Batch& batch, size_t paramOffset) {
@@ -584,7 +575,7 @@ void GLBackend::do_glUniform3f(Batch& batch, size_t paramOffset) {
     }
     updatePipeline();
     glUniform3f(
-        batch._params[paramOffset + 3]._int,
+        GET_UNIFORM_LOCATION(batch._params[paramOffset + 3]._int),
         batch._params[paramOffset + 2]._float,
         batch._params[paramOffset + 1]._float,
         batch._params[paramOffset + 0]._float);
@@ -600,8 +591,6 @@ void Batch::_glUniform4f(GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLf
     _params.push_back(v1);
     _params.push_back(v0);
     _params.push_back(location);
-
-    DO_IT_NOW(_glUniform4f, 1);
 }
 
 
@@ -613,7 +602,7 @@ void GLBackend::do_glUniform4f(Batch& batch, size_t paramOffset) {
     }
     updatePipeline();
     glUniform4f(
-        batch._params[paramOffset + 4]._int,
+        GET_UNIFORM_LOCATION(batch._params[paramOffset + 4]._int),
         batch._params[paramOffset + 3]._float,
         batch._params[paramOffset + 2]._float,
         batch._params[paramOffset + 1]._float,
@@ -628,8 +617,6 @@ void Batch::_glUniform3fv(GLint location, GLsizei count, const GLfloat* value) {
     _params.push_back(cacheData(count * VEC3_SIZE, value));
     _params.push_back(count);
     _params.push_back(location);
-
-    DO_IT_NOW(_glUniform3fv, 3);
 }
 void GLBackend::do_glUniform3fv(Batch& batch, size_t paramOffset) {
     if (_pipeline._program == 0) {
@@ -639,7 +626,7 @@ void GLBackend::do_glUniform3fv(Batch& batch, size_t paramOffset) {
     }
     updatePipeline();
     glUniform3fv(
-        batch._params[paramOffset + 2]._int,
+        GET_UNIFORM_LOCATION(batch._params[paramOffset + 2]._int),
         batch._params[paramOffset + 1]._uint,
         (const GLfloat*)batch.editData(batch._params[paramOffset + 0]._uint));
 
@@ -654,8 +641,6 @@ void Batch::_glUniform4fv(GLint location, GLsizei count, const GLfloat* value) {
     _params.push_back(cacheData(count * VEC4_SIZE, value));
     _params.push_back(count);
     _params.push_back(location);
-
-    DO_IT_NOW(_glUniform4fv, 3);
 }
 void GLBackend::do_glUniform4fv(Batch& batch, size_t paramOffset) {
     if (_pipeline._program == 0) {
@@ -665,7 +650,7 @@ void GLBackend::do_glUniform4fv(Batch& batch, size_t paramOffset) {
     }
     updatePipeline();
     
-    GLint location = batch._params[paramOffset + 2]._int;
+    GLint location = GET_UNIFORM_LOCATION(batch._params[paramOffset + 2]._int);
     GLsizei count = batch._params[paramOffset + 1]._uint;
     const GLfloat* value = (const GLfloat*)batch.editData(batch._params[paramOffset + 0]._uint);
     glUniform4fv(location, count, value);
@@ -680,8 +665,6 @@ void Batch::_glUniform4iv(GLint location, GLsizei count, const GLint* value) {
     _params.push_back(cacheData(count * VEC4_SIZE, value));
     _params.push_back(count);
     _params.push_back(location);
-
-    DO_IT_NOW(_glUniform4iv, 3);
 }
 void GLBackend::do_glUniform4iv(Batch& batch, size_t paramOffset) {
     if (_pipeline._program == 0) {
@@ -691,7 +674,7 @@ void GLBackend::do_glUniform4iv(Batch& batch, size_t paramOffset) {
     }
     updatePipeline();
     glUniform4iv(
-        batch._params[paramOffset + 2]._int,
+        GET_UNIFORM_LOCATION(batch._params[paramOffset + 2]._int),
         batch._params[paramOffset + 1]._uint,
         (const GLint*)batch.editData(batch._params[paramOffset + 0]._uint));
 
@@ -706,8 +689,6 @@ void Batch::_glUniformMatrix4fv(GLint location, GLsizei count, GLboolean transpo
     _params.push_back(transpose);
     _params.push_back(count);
     _params.push_back(location);
-
-    DO_IT_NOW(_glUniformMatrix4fv, 4);
 }
 void GLBackend::do_glUniformMatrix4fv(Batch& batch, size_t paramOffset) {
     if (_pipeline._program == 0) {
@@ -717,7 +698,7 @@ void GLBackend::do_glUniformMatrix4fv(Batch& batch, size_t paramOffset) {
     }
     updatePipeline();
     glUniformMatrix4fv(
-        batch._params[paramOffset + 3]._int,
+        GET_UNIFORM_LOCATION(batch._params[paramOffset + 3]._int),
         batch._params[paramOffset + 2]._uint,
         batch._params[paramOffset + 1]._uint,
         (const GLfloat*)batch.editData(batch._params[paramOffset + 0]._uint));
@@ -731,8 +712,6 @@ void Batch::_glColor4f(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha) 
     _params.push_back(blue);
     _params.push_back(green);
     _params.push_back(red);
-
-    DO_IT_NOW(_glColor4f, 4);
 }
 void GLBackend::do_glColor4f(Batch& batch, size_t paramOffset) {
 
