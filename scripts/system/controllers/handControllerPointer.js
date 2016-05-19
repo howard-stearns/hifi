@@ -68,6 +68,36 @@ function LatchedToggle(onFunction, offFunction, state) {
     };
 }
 
+// Code copied and adapted from handControllerGrab.js. We should refactor this.
+// fixme remove?
+function Trigger() {
+    var TRIGGER_SMOOTH_RATIO = 0.1; //  Time averaging of trigger - 0.0 disables smoothing
+    var TRIGGER_ON_VALUE = 0.4; //  Squeezed just enough to activate search or near grab
+    var TRIGGER_GRAB_VALUE = 0.85; //  Squeezed far enough to complete distant grab
+    var TRIGGER_OFF_VALUE = 0.15;
+    var that = this;
+    that.triggerValue = 0; // rolling average of trigger value
+    that.rawTriggerValue = 0;
+    that.triggerPress = function (value) {
+        that.rawTriggerValue = value;
+    };
+    that.updateSmoothedTrigger = function () {
+        var triggerValue = that.rawTriggerValue;
+        // smooth out trigger value
+        that.triggerValue = (that.triggerValue * TRIGGER_SMOOTH_RATIO) +
+            (triggerValue * (1.0 - TRIGGER_SMOOTH_RATIO));
+    };
+    that.triggerSmoothedGrab = function () {
+        return that.triggerValue > TRIGGER_GRAB_VALUE;
+    };
+    that.triggerSmoothedSqueezed = function () {
+        return that.triggerValue > TRIGGER_ON_VALUE;
+    };
+    that.triggerSmoothedReleased = function () {
+        return that.triggerValue < TRIGGER_OFF_VALUE;
+    };
+}
+
 // VERTICAL FIELD OF VIEW ---------
 //
 // Cache the verticalFieldOfView setting and update it every so often.
@@ -253,13 +283,21 @@ setupHandler(Controller.mouseDoublePressEvent, onMouseClick);
 
 // CONTROLLER MAPPING ---------
 //
+// Synthesize left and right mouse click from controller, and get trigger values matching handControllerGrab.
+// fixme
+var triggerMapping;
+var leftTrigger = new Trigger();
+var rightTrigger = new Trigger();
+var activeTrigger = rightTrigger;
 
 var activeHand = Controller.Standard.RightHand;
 function toggleHand() {
     if (activeHand === Controller.Standard.RightHand) {
         activeHand = Controller.Standard.LeftHand;
+        activeTrigger = leftTrigger;
     } else {
         activeHand = Controller.Standard.RightHand;
+        activeTrigger = rightTrigger;
     }
 }
 
@@ -288,7 +326,8 @@ function checkHardware() {
             var whenThunk = optionalWhen || function () {
                 return true;
             };
-            function maybeToggle() {
+            function maybeToggle(value) {
+                print('maybeToggle', value);
                 if (activeHand !== Controller.Standard[hand]) {
                     toggleHand();
                 }
@@ -312,7 +351,7 @@ function checkHardware() {
                 makeHandToggle('R3', 'RightHand');
                 makeHandToggle('L3', 'LeftHand');
 
-                mapToAction('R3', 'ReticleClick');
+                // FIXME RESTORE mapToAction('R3', 'ReticleClick');
                 mapToAction('L3', 'ReticleClick');
                 mapToAction('R4', 'ContextMenu');
                 mapToAction('L4', 'ContextMenu');
@@ -327,6 +366,45 @@ function checkHardware() {
                 mapToAction('LeftApplicationMenu', 'ContextMenu');
                 break;
         }
+
+        // triggerPress(v) is called whenever trigger value v changes.
+        clickMapping.from(Controller.Standard.RT).peek().to(rightTrigger.triggerPress);
+        /*var startDown = 0;
+          clickMapping.from(function () {
+            // Called continuously. We want to return 1.0 only when we want a click:
+            // on a release that comes soon after a full trigger. Otherwise 0.0.
+            //FIXME if (!Reticle.visible ) { return 0.0; } // Mouse clicks only when mouse reticle is showng.
+            if (activeTrigger.triggerSmoothedReleased()) {
+                var elapsed = startDown && (Date.now() - startDown);
+                startDown = 0;
+                var fire = elapsed && (elapsed < 1000);
+                var answer = fire ? 1.0 : 0.0;
+                if (elapsed) print('released', activeTrigger.triggerValue, activeTrigger.rawTriggerValue, Controller.getValue(Controller.Standard.RT), elapsed, fire, answer);
+                return answer;
+            }
+            if (activeTrigger.triggerSmoothedGrab()) {
+                if (!startDown) { startDown = Date.now(); }
+                print('grabbed', startDown);
+            }
+            return 0.0;
+            }).peek().to(function (v) { print('got xx', v); });*/
+        var xxstate = 0.0;
+        function smoothedTrigger() {
+            if (activeTrigger.triggerSmoothedGrab()) {
+                xxstate = 1.0;
+            } else if (activeTrigger.triggerSmoothedReleased()) {
+                xxstate = 0.0;
+            }
+            return xxstate;
+            //return Controller.getValue(Controller.Standard.RT);
+            
+        }
+        clickMapping.from(smoothedTrigger).peek().to(function (v) { print('got xx', v); });
+        //clickMapping.from(Controller.Standard.RT).peek().to(function (v) { print('got RT', v); });
+        clickMapping.from(smoothedTrigger).peek().to(Controller.Actions.ReticleClick);
+        clickMapping.from(Controller.Hardware.Hydra.R3).peek().to(function (v) { print('got R3', v); });
+        //clickMapping.from(Controller.Hardware.Hydra.R3).peek().to(Controller.Actions.ReticleClick);
+
         clickMappings[hardware] = clickMapping;
     }
     clickMapToggle = new LatchedToggle(clickMapping.enable, clickMapping.disable);
@@ -397,6 +475,7 @@ function updateVisualization(controllerPosition, controllerDirection, hudPositio
 
 // MAIN OPERATIONS -----------
 //
+var fixmeOneShot = true;
 function update() {
     var now = Date.now();
     if (!handControllerLockOut.expired(now)) {
@@ -406,6 +485,7 @@ function update() {
         return turnOffVisualization();
     }  // What to do? menus can be behind hand!
     if (!Window.hasFocus()) { // Don't mess with other apps
+        if (fixmeOneShot) { print('no focus'); fixmeOneShot=false; }
         return turnOffVisualization();
     }
     var controllerPose = Controller.getPoseValue(activeHand);
@@ -413,6 +493,8 @@ function update() {
     if (!controllerPose.valid || ((hardware === 'Vive') && !HMD.active)) {
         return turnOffVisualization();
     } // Controller is cradled.
+    leftTrigger.updateSmoothedTrigger();
+    rightTrigger.updateSmoothedTrigger();
     var controllerPosition = Vec3.sum(Vec3.multiplyQbyV(MyAvatar.orientation, controllerPose.translation),
                                       MyAvatar.position);
     // This gets point direction right, but if you want general quaternion it would be more complicated:
