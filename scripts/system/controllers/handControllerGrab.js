@@ -302,7 +302,10 @@ function MyController(hand) {
     this.update = function() {
 
         this.updateSmoothedTrigger();
-
+        if (Reticle.visible) {
+            _this.turnOffVisualizations();
+            return;
+        }
         switch (this.state) {
             case STATE_OFF:
                 this.off();
@@ -759,8 +762,6 @@ function MyController(hand) {
             this.particleBeamOff();
         }
         this.searchSphereOff();
-
-        Reticle.setVisible(true);
 
     };
 
