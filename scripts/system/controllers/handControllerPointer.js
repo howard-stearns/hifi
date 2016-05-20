@@ -129,11 +129,15 @@ var setReticlePosition = function (point2d) {
 // Generalizations of utilities that work with system and overlay elements.
 function findRayIntersection(pickRay) {
     // Check 3D overlays and entities. Argument is an object with origin and direction.
-    var result = Overlays.findRayIntersection(pickRay);
-    if (!result.intersects) {
-        result = Entities.findRayIntersection(pickRay, true);
+    var overlayResult = Overlays.findRayIntersection(pickRay);
+    var entitiesResult = Entities.findRayIntersection(pickRay, true);
+    if (!overlayResult.intersects) {
+        return entitiesResult;
     }
-    return result;
+    if (!entitiesResult.intersects) {
+        return overlayResult;
+    }
+    return (overlayResult.distance < entitiesResult.distance) ? overlayResult : entitiesResult;
 }
 function isPointingAtOverlay(optionalHudPosition2d) {
     return Reticle.pointingAtSystemOverlay || Overlays.getOverlayAtPoint(optionalHudPosition2d || Reticle.position);
