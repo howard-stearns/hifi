@@ -22,6 +22,13 @@ function objectTranslationPlanePoint(position, dimensions) {
     return newPosition;
 }
 
+function findRayIntersection(event) {
+    // Consolidating some uses so we can experiment with hooking them.
+    var pickRay = Camera.computePickRay(event.x, event.y);
+    return Overlays.findRayIntersection(pickRay);
+}
+
+
 SelectionManager = (function() {
     var that = {};
 
@@ -3350,7 +3357,6 @@ SelectionDisplay = (function() {
             pushCommandForSelections();
         },
         onMove: function(event) {
-            var pickRay = Camera.computePickRay(event.x, event.y);
             Overlays.editOverlay(selectionBox, {
                 ignoreRayIntersection: true,
                 visible: false
@@ -3363,7 +3369,7 @@ SelectionDisplay = (function() {
                 ignoreRayIntersection: false
             });
 
-            var result = Overlays.findRayIntersection(pickRay);
+            var result = findRayIntersection(event);
 
             if (result.intersects) {
                 var center = yawCenter;
@@ -3520,7 +3526,6 @@ SelectionDisplay = (function() {
             pushCommandForSelections();
         },
         onMove: function(event) {
-            var pickRay = Camera.computePickRay(event.x, event.y);
             Overlays.editOverlay(selectionBox, {
                 ignoreRayIntersection: true,
                 visible: false
@@ -3532,7 +3537,7 @@ SelectionDisplay = (function() {
             Overlays.editOverlay(rotateOverlayTarget, {
                 ignoreRayIntersection: false
             });
-            var result = Overlays.findRayIntersection(pickRay);
+            var result = findRayIntersection(event);
 
             if (result.intersects) {
                 var properties = Entities.getEntityProperties(selectionManager.selections[0]);
@@ -3682,7 +3687,6 @@ SelectionDisplay = (function() {
             pushCommandForSelections();
         },
         onMove: function(event) {
-            var pickRay = Camera.computePickRay(event.x, event.y);
             Overlays.editOverlay(selectionBox, {
                 ignoreRayIntersection: true,
                 visible: false
@@ -3694,7 +3698,7 @@ SelectionDisplay = (function() {
             Overlays.editOverlay(rotateOverlayTarget, {
                 ignoreRayIntersection: false
             });
-            var result = Overlays.findRayIntersection(pickRay);
+            var result = findRayIntersection(event);
 
             if (result.intersects) {
                 var properties = Entities.getEntityProperties(selectionManager.selections[0]);
@@ -3803,7 +3807,6 @@ SelectionDisplay = (function() {
         }
 
         var somethingClicked = false;
-        var pickRay = Camera.computePickRay(event.x, event.y);
 
         // before we do a ray test for grabbers, disable the ray intersection for our selection box
         Overlays.editOverlay(selectionBox, {
@@ -3818,7 +3821,7 @@ SelectionDisplay = (function() {
         Overlays.editOverlay(rollHandle, {
             ignoreRayIntersection: true
         });
-        var result = Overlays.findRayIntersection(pickRay);
+        var result = findRayIntersection(event);
 
         if (result.intersects) {
 
@@ -3934,7 +3937,7 @@ SelectionDisplay = (function() {
             Overlays.editOverlay(rollHandle, {
                 ignoreRayIntersection: false
             });
-            var result = Overlays.findRayIntersection(pickRay);
+            //var result = Overlays.findRayIntersection(pickRay); // This was already set above, without any intervening change to pickRay
 
             var overlayOrientation;
             var overlayCenter;
@@ -4138,7 +4141,7 @@ SelectionDisplay = (function() {
             Overlays.editOverlay(selectionBox, {
                 ignoreRayIntersection: false
             });
-            var result = Overlays.findRayIntersection(pickRay);
+            //var result = Overlays.findRayIntersection(pickRay); // this was already computed above, without any interventing change to pickRay
             if (result.intersects) {
                 switch (result.overlayID) {
                     case selectionBox:
@@ -4146,13 +4149,14 @@ SelectionDisplay = (function() {
                         translateXZTool.pickPlanePosition = result.intersection;
                         translateXZTool.greatestDimension = Math.max(Math.max(SelectionManager.worldDimensions.x, SelectionManager.worldDimensions.y), 
                             SelectionManager.worldDimensions.z);
-                        if (wantDebug) {
+                        /* // This debugging code makes use of a pickRay that is now not a local variable.
+                          if (wantDebug) {
                             print("longest dimension: " + translateXZTool.greatestDimension);
                             translateXZTool.startingDistance = Vec3.distance(pickRay.origin, SelectionManager.position);
                             print("starting distance: " + translateXZTool.startingDistance);
                             translateXZTool.startingElevation = translateXZTool.elevation(pickRay.origin, translateXZTool.pickPlanePosition);
                             print(" starting elevation: " + translateXZTool.startingElevation);
-                        }
+                        }*/
                         
                         mode = translateXZTool.mode;
                         activeTool.onBegin(event);
@@ -4169,7 +4173,7 @@ SelectionDisplay = (function() {
         }
 
         if (somethingClicked) {
-            pickRay = Camera.computePickRay(event.x, event.y);
+            //pickRay = Camera.computePickRay(event.x, event.y); // Nothing looks at this. Why was it set?
             if (wantDebug) {
                 print("mousePressEvent()...... " + overlayNames[result.overlayID]);
             }
@@ -4201,8 +4205,7 @@ SelectionDisplay = (function() {
         }
 
         // if no tool is active, then just look for handles to highlight...
-        var pickRay = Camera.computePickRay(event.x, event.y);
-        var result = Overlays.findRayIntersection(pickRay);
+        var result = findRayIntersection(event);
         var pickedColor;
         var pickedAlpha;
         var highlightNeeded = false;
