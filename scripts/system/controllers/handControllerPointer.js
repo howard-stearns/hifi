@@ -420,6 +420,10 @@ function updateVisualization(controllerPosition, controllerDirection, hudPositio
     var falseProjection = intersection3d(eye, Vec3.subtract(hudPosition3d, eye));
     Overlays.editOverlay(fakeProjectionBall, {visible: true, position: falseProjection});
     */
+    if (!systemLaserOn) { // In case the laser is passing in front of a window.
+        // Maybe we should make the color match the grab pointer? But how would we do far grab particles?
+        systemLaserOn = HMD.setHandLasers(activeHudLaser, true, LASER_COLOR_XYZW, SYSTEM_LASER_DIRECTION);
+    }
     Reticle.visible = false;
 
     return visualizationIsShowing; // In case we change caller to act conditionally.
