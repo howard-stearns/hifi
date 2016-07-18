@@ -31,6 +31,8 @@ Fadable {
     // Signals
     //
     signal windowDestroyed();
+    signal mouseEntered();
+    signal mouseExited();
 
     //
     // Native properties
@@ -114,7 +116,6 @@ Fadable {
         acceptedButtons: Qt.AllButtons
         enabled: window.visible
         onPressed: {
-            //console.log("Pressed on activator area");
             window.raise();
             mouse.accepted = false;
         }
@@ -287,4 +288,7 @@ Fadable {
                 break;
         }
     }
+
+    onMouseEntered: console.log("Mouse entered " + window)
+    onMouseExited: console.log("Mouse exited " + window)
 }

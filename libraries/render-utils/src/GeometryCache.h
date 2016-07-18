@@ -132,6 +132,8 @@ public:
         Line,
         Triangle,
         Quad,
+        Hexagon,
+        Octagon,
         Circle,
         Cube,
         Sphere,
@@ -139,10 +141,9 @@ public:
         Octahedron,
         Dodecahedron,
         Icosahedron,
-        Torus,
-        Cone,
-        Cylinder,
-
+        Torus, // not yet implemented
+        Cone, // not yet implemented
+        Cylinder, // not yet implemented
         NUM_SHAPES,
     };
 
@@ -168,6 +169,13 @@ public:
     void renderSolidShapeInstance(gpu::Batch& batch, Shape shape, const glm::vec3& color,
                                     const render::ShapePipelinePointer& pipeline = _simplePipeline) {
         renderSolidShapeInstance(batch, shape, glm::vec4(color, 1.0f), pipeline);
+    }
+
+    void renderWireShapeInstance(gpu::Batch& batch, Shape shape, const glm::vec4& color = glm::vec4(1),
+        const render::ShapePipelinePointer& pipeline = _simplePipeline);
+    void renderWireShapeInstance(gpu::Batch& batch, Shape shape, const glm::vec3& color,
+        const render::ShapePipelinePointer& pipeline = _simplePipeline) {
+        renderWireShapeInstance(batch, shape, glm::vec4(color, 1.0f), pipeline);
     }
 
     void renderSolidSphereInstance(gpu::Batch& batch, const glm::vec4& color,
@@ -283,7 +291,9 @@ public:
                                     const glm::vec4& color1, const glm::vec4& color2, int id = UNKNOWN_ID);
 
     void updateVertices(int id, const QVector<glm::vec2>& points, const glm::vec4& color);
+    void updateVertices(int id, const QVector<glm::vec2>& points, const QVector<glm::vec4>& colors);
     void updateVertices(int id, const QVector<glm::vec3>& points, const glm::vec4& color);
+    void updateVertices(int id, const QVector<glm::vec3>& points, const QVector<glm::vec4>& colors);
     void updateVertices(int id, const QVector<glm::vec3>& points, const QVector<glm::vec2>& texCoords, const glm::vec4& color);
     void renderVertices(gpu::Batch& batch, gpu::Primitive primitiveType, int id);
 
@@ -360,7 +370,7 @@ private:
 
     QHash<IntPair, VerticesIndices> _coneVBOs;
 
-    int _nextID{ 0 };
+    int _nextID{ 1 };
 
     QHash<int, Vec3PairVec4Pair> _lastRegisteredQuad3DTexture;
     QHash<Vec3PairVec4Pair, BatchItemDetails> _quad3DTextures;
@@ -400,8 +410,6 @@ private:
     QHash<Vec2FloatPairPair, GridBuffer> _gridBuffers;
     QHash<int, GridBuffer> _registeredGridBuffers;
 
-    QHash<QUrl, QWeakPointer<NetworkGeometry> > _networkGeometry;
-    
     gpu::ShaderPointer _simpleShader;
     gpu::ShaderPointer _unlitShader;
     static render::ShapePipelinePointer _simplePipeline;

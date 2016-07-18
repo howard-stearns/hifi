@@ -60,6 +60,18 @@ static const uint SHAPE_NORMALS_OFFSET = sizeof(glm::vec3);
 static const gpu::Type SHAPE_INDEX_TYPE = gpu::UINT32;
 static const uint SHAPE_INDEX_SIZE = sizeof(gpu::uint32);
 
+template <size_t SIDES>
+std::vector<vec3> polygon() {
+    std::vector<vec3> result;
+    result.reserve(SIDES);
+    double angleIncrement = 2.0 * M_PI / SIDES;
+    for (size_t i = 0; i < SIDES; ++i) {
+        double angle = (double)i * angleIncrement;
+        result.push_back(vec3{ cos(angle) * 0.5, 0.0, sin(angle) * 0.5 });
+    }
+    return result;
+}
+
 void GeometryCache::ShapeData::setupVertices(gpu::BufferPointer& vertexBuffer, const geometry::VertexVector& vertices) {
     vertexBuffer->append(vertices);
 
@@ -239,6 +251,75 @@ void setupSmoothShape(GeometryCache::ShapeData& shapeData, const geometry::Solid
     shapeData.setupIndices(indexBuffer, solidIndices, wireIndices);
 }
 
+template <uint32_t N>
+void extrudePolygon(GeometryCache::ShapeData& shapeData, gpu::BufferPointer& vertexBuffer, gpu::BufferPointer& indexBuffer) {
+    using namespace geometry;
+    Index baseVertex = (Index)(vertexBuffer->getSize() / SHAPE_VERTEX_STRIDE);
+    VertexVector vertices;
+    IndexVector solidIndices, wireIndices;
+
+    // Top and bottom faces
+    std::vector<vec3> shape = polygon<N>();
+    for (const vec3& v : shape) {
+        vertices.push_back(vec3(v.x, 0.5f, v.z));
+        vertices.push_back(vec3(0, 1, 0));
+    }
+    for (const vec3& v : shape) {
+        vertices.push_back(vec3(v.x, -0.5f, v.z));
+        vertices.push_back(vec3(0, -1, 0));
+    }
+    for (uint32_t i = 2; i < N; ++i) {
+        solidIndices.push_back(baseVertex + 0);
+        solidIndices.push_back(baseVertex + i);
+        solidIndices.push_back(baseVertex + i - 1);
+        solidIndices.push_back(baseVertex + N);
+        solidIndices.push_back(baseVertex + i + N - 1);
+        solidIndices.push_back(baseVertex + i + N);
+    }
+    for (uint32_t i = 1; i <= N; ++i) {
+        wireIndices.push_back(baseVertex + (i % N));
+        wireIndices.push_back(baseVertex + i - 1);
+        wireIndices.push_back(baseVertex + (i % N) + N);
+        wireIndices.push_back(baseVertex + (i - 1) + N);
+    }
+
+    // Now do the sides
+    baseVertex += 2 * N;
+
+    for (uint32_t i = 0; i < N; ++i) {
+        vec3 left = shape[i];
+        vec3 right = shape[(i + 1) % N];
+        vec3 normal = glm::normalize(left + right);
+        vec3 topLeft = vec3(left.x, 0.5f, left.z);
+        vec3 topRight = vec3(right.x, 0.5f, right.z);
+        vec3 bottomLeft = vec3(left.x, -0.5f, left.z);
+        vec3 bottomRight = vec3(right.x, -0.5f, right.z);
+
+        vertices.push_back(topLeft);
+        vertices.push_back(normal);
+        vertices.push_back(bottomLeft);
+        vertices.push_back(normal);
+        vertices.push_back(topRight);
+        vertices.push_back(normal);
+        vertices.push_back(bottomRight);
+        vertices.push_back(normal);
+
+        solidIndices.push_back(baseVertex + 0);
+        solidIndices.push_back(baseVertex + 2);
+        solidIndices.push_back(baseVertex + 1);
+        solidIndices.push_back(baseVertex + 1);
+        solidIndices.push_back(baseVertex + 2);
+        solidIndices.push_back(baseVertex + 3);
+        wireIndices.push_back(baseVertex + 0);
+        wireIndices.push_back(baseVertex + 1);
+        wireIndices.push_back(baseVertex + 3);
+        wireIndices.push_back(baseVertex + 2);
+        baseVertex += 4;
+    }
+
+    shapeData.setupVertices(vertexBuffer, vertices);
+    shapeData.setupIndices(indexBuffer, solidIndices, wireIndices);
+}
 
 // FIXME solids need per-face vertices, but smooth shaded
 // components do not.  Find a way to support using draw elements
@@ -285,10 +366,13 @@ void GeometryCache::buildShapes() {
     // Not implememented yet:
 
     //Triangle,
+    extrudePolygon<3>(_shapes[Triangle], _shapeVertices, _shapeIndices);
+    //Hexagon,
+    extrudePolygon<6>(_shapes[Hexagon], _shapeVertices, _shapeIndices);
+    //Octagon,
+    extrudePolygon<8>(_shapes[Octagon], _shapeVertices, _shapeIndices);
     //Quad,
     //Circle,
-    //Octahetron,
-    //Dodecahedron,
     //Torus,
     //Cone,
     //Cylinder,
@@ -432,7 +516,7 @@ void GeometryCache::renderGrid(gpu::Batch& batch, const glm::vec2& minCorner, co
     renderQuad(batch, minCorner, maxCorner, MIN_TEX_COORD, MAX_TEX_COORD, color, id);
 }
 
-void GeometryCache::updateVertices(int id, const QVector<glm::vec2>& points, const glm::vec4& color) {
+void GeometryCache::updateVertices(int id, const QVector<glm::vec2>& points, const QVector<glm::vec4>& colors) {
     BatchItemDetails& details = _registeredVertices[id];
 
     if (details.isCreated) {
@@ -469,11 +553,6 @@ void GeometryCache::updateVertices(int id, const QVector<glm::vec2>& points, con
     details.vertices = points.size();
     details.vertexSize = FLOATS_PER_VERTEX;
 
-    int compactColor = ((int(color.x * 255.0f) & 0xFF)) |
-        ((int(color.y * 255.0f) & 0xFF) << 8) |
-        ((int(color.z * 255.0f) & 0xFF) << 16) |
-        ((int(color.w * 255.0f) & 0xFF) << 24);
-
     float* vertexData = new float[details.vertices * FLOATS_PER_VERTEX];
     float* vertex = vertexData;
 
@@ -481,16 +560,25 @@ void GeometryCache::updateVertices(int id, const QVector<glm::vec2>& points, con
     int* colorDataAt = colorData;
 
     const glm::vec3 NORMAL(0.0f, 0.0f, 1.0f);
-    foreach(const glm::vec2& point, points) {
+    auto pointCount = points.size();
+    auto colorCount = colors.size();
+    int compactColor = 0;
+    for (auto i = 0; i < pointCount; ++i) {
+        const auto& point = points[i];
         *(vertex++) = point.x;
         *(vertex++) = point.y;
         *(vertex++) = NORMAL.x;
         *(vertex++) = NORMAL.y;
         *(vertex++) = NORMAL.z;
-
+        if (i < colorCount) {
+            const auto& color = colors[i];
+            compactColor = ((int(color.x * 255.0f) & 0xFF)) |
+                ((int(color.y * 255.0f) & 0xFF) << 8) |
+                ((int(color.z * 255.0f) & 0xFF) << 16) |
+                ((int(color.w * 255.0f) & 0xFF) << 24);
+        }
         *(colorDataAt++) = compactColor;
     }
-
     details.verticesBuffer->append(sizeof(float) * FLOATS_PER_VERTEX * details.vertices, (gpu::Byte*) vertexData);
     details.colorBuffer->append(sizeof(int) * details.vertices, (gpu::Byte*) colorData);
     delete[] vertexData;
@@ -501,7 +589,11 @@ void GeometryCache::updateVertices(int id, const QVector<glm::vec2>& points, con
 #endif
 }
 
-void GeometryCache::updateVertices(int id, const QVector<glm::vec3>& points, const glm::vec4& color) {
+void GeometryCache::updateVertices(int id, const QVector<glm::vec2>& points, const glm::vec4& color) {
+    updateVertices(id, points, QVector<glm::vec4>({ color }));
+}
+
+void GeometryCache::updateVertices(int id, const QVector<glm::vec3>& points, const QVector<glm::vec4>& colors) {
     BatchItemDetails& details = _registeredVertices[id];
     if (details.isCreated) {
         details.clear();
@@ -537,11 +629,8 @@ void GeometryCache::updateVertices(int id, const QVector<glm::vec3>& points, con
     details.vertices = points.size();
     details.vertexSize = FLOATS_PER_VERTEX;
 
-    int compactColor = ((int(color.x * 255.0f) & 0xFF)) |
-        ((int(color.y * 255.0f) & 0xFF) << 8) |
-        ((int(color.z * 255.0f) & 0xFF) << 16) |
-        ((int(color.w * 255.0f) & 0xFF) << 24);
-
+    // Default to white
+    int compactColor = 0xFFFFFFFF;
     float* vertexData = new float[details.vertices * FLOATS_PER_VERTEX];
     float* vertex = vertexData;
 
@@ -549,14 +638,23 @@ void GeometryCache::updateVertices(int id, const QVector<glm::vec3>& points, con
     int* colorDataAt = colorData;
 
     const glm::vec3 NORMAL(0.0f, 0.0f, 1.0f);
-    foreach(const glm::vec3& point, points) {
+    auto pointCount = points.size();
+    auto colorCount = colors.size();
+    for (auto i = 0; i < pointCount; ++i) {
+        const glm::vec3& point = points[i];
+        if (i < colorCount) {
+            const glm::vec4& color = colors[i];
+            compactColor = ((int(color.x * 255.0f) & 0xFF)) |
+                ((int(color.y * 255.0f) & 0xFF) << 8) |
+                ((int(color.z * 255.0f) & 0xFF) << 16) |
+                ((int(color.w * 255.0f) & 0xFF) << 24);
+        }
         *(vertex++) = point.x;
         *(vertex++) = point.y;
         *(vertex++) = point.z;
         *(vertex++) = NORMAL.x;
         *(vertex++) = NORMAL.y;
         *(vertex++) = NORMAL.z;
-
         *(colorDataAt++) = compactColor;
     }
 
@@ -568,6 +666,10 @@ void GeometryCache::updateVertices(int id, const QVector<glm::vec3>& points, con
 #ifdef WANT_DEBUG
     qCDebug(renderutils) << "new registered linestrip buffer made -- _registeredVertices.size():" << _registeredVertices.size();
 #endif
+}
+
+void GeometryCache::updateVertices(int id, const QVector<glm::vec3>& points, const glm::vec4& color) {
+    updateVertices(id, points, QVector<glm::vec4>({ color }));
 }
 
 void GeometryCache::updateVertices(int id, const QVector<glm::vec3>& points, const QVector<glm::vec2>& texCoords, const glm::vec4& color) {
@@ -1738,6 +1840,11 @@ void renderInstances(gpu::Batch& batch, const glm::vec4& color, bool isWire,
 void GeometryCache::renderSolidShapeInstance(gpu::Batch& batch, GeometryCache::Shape shape, const glm::vec4& color, const render::ShapePipelinePointer& pipeline) {
     renderInstances(batch, color, false, pipeline, shape);
 }
+
+void GeometryCache::renderWireShapeInstance(gpu::Batch& batch, GeometryCache::Shape shape, const glm::vec4& color, const render::ShapePipelinePointer& pipeline) {
+    renderInstances(batch, color, true, pipeline, shape);
+}
+
 
 void GeometryCache::renderSolidSphereInstance(gpu::Batch& batch, const glm::vec4& color, const render::ShapePipelinePointer& pipeline) {
     renderInstances(batch, color, false, pipeline, GeometryCache::Sphere);
