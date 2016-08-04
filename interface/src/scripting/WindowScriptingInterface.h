@@ -42,6 +42,7 @@ public:
     int getInnerHeight();
     int getX();
     int getY();
+    Q_INVOKABLE void show(const QString& url, const QString& title);
 
 public slots:
     QScriptValue hasFocus();

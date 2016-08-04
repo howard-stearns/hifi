@@ -28,6 +28,12 @@
 static const QString DESKTOP_LOCATION = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
 static const QString LAST_BROWSE_LOCATION_SETTING = "LastBrowseLocation";
 
+void WindowScriptingInterface::show(const QString& url, const QString& title) {
+    auto offscreenUi = DependencyManager::get<OffscreenUi>();
+    offscreenUi->executeOnUiThread([=] {
+        offscreenUi->show(url, title);
+    });
+}
 
 QScriptValue CustomPromptResultToScriptValue(QScriptEngine* engine, const CustomPromptResult& result) {
     if (!result.value.isValid()) {
