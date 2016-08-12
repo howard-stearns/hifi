@@ -1,11 +1,52 @@
 <html>
   <head>
     <title>Share</title>
-    <link rel="stylesheet" type="text/css" href="edit-style.css">
+    <link rel="stylesheet" type="text/css" href="css/edit-style.css">
+    <style type="text/css">
+      .snapshot-container{
+        width:100%;
+      }
+
+      .snapshot-column-left{
+        width:50%;
+        float:left;
+      }
+
+      .snapshot-column-right{
+        width:50%;
+        float:right;
+      }
+      
+      .snapshot-column-right > div > img{
+        max-width: 100%;
+        height:auto;
+      }
+
+      @media (max-width: 768px){
+        .snapshot-column-left{
+        width:100%;
+        }
+        .snapshot-column-right{
+        width:100%;
+        }
+        .snapshot-column-right > div > img{
+        margin-top:32px;
+        }
+      }
+
+      .snapsection{
+        width:95% !important;
+        padding-right:0px;
+      }
+      div#sharing {
+        margin-top:50px;
+      }
+
+    </style>
     <script type="text/javascript" src="qrc:///qtwebchannel/qwebchannel.js"></script>
-    <script type="text/javascript" src="eventBridgeLoader.js"></script>
+    <script type="text/javascript" src="js/eventBridgeLoader.js"></script>
     <script>
-    var paths = [], idCounter = 0;
+    var paths = [], idCounter = 0, useCheckboxes;
     function addImage(data) {
         var div = document.createElement("DIV"),
             input = document.createElement("INPUT"),
@@ -14,30 +55,53 @@
             id = "p" + idCounter++;
         function toggle() { data.share = input.checked; }
         img.src = data.localPath;
-        label.appendChild(img);
-        // Our stylesheet(?) requires input.id to match label.for. Otherwise input doesn't display the check state.
-        label.setAttribute('for', id); // cannot do label.for =
-        input.id = id;
-        input.type = "checkbox";
-        input.checked = data.share = true;
-        input.addEventListener('change', toggle);
-        div.class = "property checkbox";
-        div.appendChild(input);
-        div.appendChild(label);
-        document.getElementById("images").appendChild(div);
+        div.appendChild(img);
+        data.share = true;
+        if (useCheckboxes) { // I'd rather use css, but the included stylesheet is quite particular.
+            // Our stylesheet(?) requires input.id to match label.for. Otherwise input doesn't display the check state.
+            label.setAttribute('for', id); // cannot do label.for =
+            input.id = id;
+            input.type = "checkbox";
+            input.checked = true;
+            input.addEventListener('change', toggle);
+            div.class = "property checkbox";
+            div.appendChild(input);
+            div.appendChild(label);
+        }
+        document.getElementById("snapshot-images").appendChild(div);
         paths.push(data);
 
+    }
+    function handleShareButtons(shareMsg) {
+        if (!shareMsg.canShare) {
+            // this means you may or may not be logged in, but can't share
+            // because you are not in a public place.
+            document.getElementById("sharing").innerHTML = "<p>Snapshots can be shared when they're taken in shareable places.";
+        } else if (!shareMsg.isLoggedIn) {
+            // this means you are in a public place, but can't share because
+            // you need to login.  Soon we will just bring up the share dialog
+            // in this case (and maybe set a boolean here to inform the html)
+            document.getElementById("sharing").innerHTML = "<p>Snapshots can be shared when you are logged in.";
+        }
     }
     window.onload = function () {
         // Something like the following will allow testing in a browser.
         //addImage({localPath: 'c:/Users/howar/OneDrive/Pictures/hifi-snap-by--on-2016-07-27_12-58-43.jpg'});
+        //addImage({localPath: 'http://lorempixel.com/1512/1680'});
         openEventBridge(function () {
             // Set up a handler for receiving the data, and tell the .js we are ready to receive it.
             EventBridge.scriptEventReceived.connect(function (message) {
+                // last element of list contains a bool for whether or not we can share stuff
+                var shareMsg = message.pop();
+                handleShareButtons(shareMsg);
+                
+                // rest are image paths which we add
+                useCheckboxes = message.length > 1;
                 message.forEach(addImage);
             });
             EventBridge.emitWebEvent('ready');
          });
+
     };
     // beware of bug: Cannot send objects at top level. (Nested in arrays is fine.)
     shareSelected = function() {
@@ -47,32 +111,29 @@
         EventBridge.emitWebEvent([]);
     };
     </script>
-    <style type="text/css">
-      div.columns div:first-child  { width: 300px; }
-      div.columns div  { float: left; }
-      div.clear        { clear: both; }
-      img { width: 400; }
-    </style>
+
   </head>
 
   <body>
-    <div class="columns">
-      <div>
-        <div class="section-header">
+    <div class="snapshot-container">
+      <div class="snapshot-column-left">
+        <div class="section-header snapsection">
           <label>Snapshots sucessfully saved!</label>
         </div>
-        <div class="sub-section-header">
-          <label>Would you like to share?</label>
-        </div>
-        <div class="sub-section-header">
-          <input type="button" id="share" value="SHARE IN FEED" onclick="shareSelected()"/>
-        </div>
-        <div class="sub-section-header">
-          <input type="button" class="red" id="close" value="DON'T SHARE" onclick="doNotShare()"/>
+        <div id="sharing">
+            <div class="sub-section-header snapsection">
+                <label>Would you like to share?</label>
+            </div>
+            <div class="sub-section-header snapsection">
+                <input type="button" id="share" value="SHARE IN FEED" onclick="shareSelected()"/>
+            </div>
+            <div class="sub-section-header snapsection">
+                <input type="button" class="red" id="close" value="DON'T SHARE" onclick="doNotShare()"/>
+            </div>
         </div>
       </div>
-      <div id="images" class="image-column"/>
+      <div id="snapshot-images" class="snapshot-column-right"/>
+      </div>
     </div>
-    <div class="clear"></div>
   </body>
 </html>
