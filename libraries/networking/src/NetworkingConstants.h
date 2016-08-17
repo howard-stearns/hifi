@@ -16,7 +16,7 @@
 
 namespace NetworkingConstants {
 //    const QUrl METAVERSE_SERVER_URL = QUrl("https://metaverse.highfidelity.com");
-    const QUrl METAVERSE_SERVER_URL = QUrl("http://10.0.0.242:3000");
+    const QUrl METAVERSE_SERVER_URL = QUrl("http://10.0.0.241:3000");
 }
 
 #endif // hifi_NetworkingConstants_h
