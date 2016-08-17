@@ -64,7 +64,8 @@ Window {
     property var allStories: [];
     property int cardWidth: 200;
     property int cardHeight: 152;
-    property string metaverseBase: "https://metaverse.highfidelity.com/api/v1/";
+    //property string metaverseBase: "https://metaverse.highfidelity.com/api/v1/";
+    property string metaverseBase: "http://10.0.0.242:3000/api/v1/";
 
     AddressBarDialog {
         id: addressBarDialog
