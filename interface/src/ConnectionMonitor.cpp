@@ -18,7 +18,7 @@
 #include <DomainHandler.h>
 #include <AddressManager.h>
 
-static const int DISPLAY_AFTER_DISCONNECTED_FOR_X_MS = 5000;
+static const int DISPLAY_AFTER_DISCONNECTED_FOR_X_MS = 10000;
 
 void ConnectionMonitor::init() {
     // Connect to domain disconnected message
@@ -36,7 +36,7 @@ void ConnectionMonitor::init() {
     _timer.start();
 
     auto dialogsManager = DependencyManager::get<DialogsManager>();
-    connect(&_timer, &QTimer::timeout, dialogsManager.data(), &DialogsManager::showAddressBar);
+    // FIXME RESTORE THIS connect(&_timer, &QTimer::timeout, dialogsManager.data(), &DialogsManager::showAddressBar);
 }
 
 void ConnectionMonitor::disconnectedFromDomain() {
