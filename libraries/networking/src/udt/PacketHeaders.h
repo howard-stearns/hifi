@@ -101,7 +101,9 @@ public:
         NodeKickRequest,
         NodeMuteRequest,
         RadiusIgnoreRequest,
-        LAST_PACKET_TYPE = RadiusIgnoreRequest
+        UsernameFromIDRequest,
+        UsernameFromIDReply,
+        LAST_PACKET_TYPE = UsernameFromIDReply
     };
 };
 
@@ -203,14 +205,16 @@ enum class AvatarMixerPacketVersion : PacketVersion {
     AbsoluteSixByteRotations,
     SensorToWorldMat,
     HandControllerJoints,
-    HasKillAvatarReason
+    HasKillAvatarReason,
+    SessionDisplayName
 };
 
 enum class DomainConnectRequestVersion : PacketVersion {
     NoHostname = 17,
     HasHostname,
     HasProtocolVersions,
-    HasMACAddress
+    HasMACAddress,
+    HasMachineFingerprint
 };
 
 enum class DomainConnectionDeniedVersion : PacketVersion {
@@ -226,7 +230,9 @@ enum class DomainServerAddedNodeVersion : PacketVersion {
 
 enum class DomainListVersion : PacketVersion {
     PrePermissionsGrid = 18,
-    PermissionsGrid
+    PermissionsGrid,
+    GetUsernameFromUUIDSupport,
+    GetMachineFingerprintFromUUIDSupport
 };
 
 enum class AudioVersion : PacketVersion {
