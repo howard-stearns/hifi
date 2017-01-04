@@ -136,7 +136,16 @@ pal.fromQml.connect(function (message) { // messages are {method, params}, like 
         HighlightedEntity.clearOverlays();
         if (selectedIds.length) {
             Entities.findEntitiesInFrustum(Camera.frustum).forEach(function (id) {
-                var properties = Entities.getEntityProperties(id); //fixme bug: lastEditedBy does NOT show up when explicitly asked for! ['lastEditedBy', 'position', 'rotation', 'dimensions']);
+                // Because lastEditedBy is per session, the vast majority of entities won't match,
+                // so it would probably be worth reducing marshalling costs by asking for just we need.
+                // However, providing property name(s) is advisory and some additional properties are
+                // included anyway. As it turns out, asking for 'lastEditedBy' gives 'position', 'rotation',
+                // and 'dimensions', too, so we might as well make use of them instead of making a second
+                // getEntityProperties call.
+                // It would be nice if we could harden this against future changes by specifying all
+                // and only these four in an array, but see
+                // https://highfidelity.fogbugz.com/f/cases/2728/Entities-getEntityProperties-id-lastEditedBy-name-lastEditedBy-doesn-t-work
+                var properties = Entities.getEntityProperties(id, 'lastEditedBy');
                 if (ExtendedOverlay.isSelected(properties.lastEditedBy)) {
                     new HighlightedEntity(id, properties);
                 }
