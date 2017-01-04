@@ -532,7 +532,6 @@ void DomainServer::setupNodeListAndAssignments() {
     // NodeList won't be available to the settings manager when it is created, so call registerListener here
     packetReceiver.registerListener(PacketType::DomainSettingsRequest, &_settingsManager, "processSettingsRequestPacket");
     packetReceiver.registerListener(PacketType::NodeKickRequest, &_settingsManager, "processNodeKickRequestPacket");
-    packetReceiver.registerListener(PacketType::UsernameFromIDRequest, &_settingsManager, "processUsernameFromIDRequestPacket");
     
     // register the gatekeeper for the packets it needs to receive
     packetReceiver.registerListener(PacketType::DomainConnectRequest, &_gatekeeper, "processConnectRequestPacket");
@@ -1272,12 +1271,7 @@ void DomainServer::sendHeartbeatToMetaverse(const QString& networkAddress) {
     QString domainUpdateJSON = QString("{\"domain\":%1}").arg(QString(QJsonDocument(domainObject).toJson(QJsonDocument::Compact)));
 
     static const QString DOMAIN_UPDATE = "/api/v1/domains/%1";
-    QString path = DOMAIN_UPDATE.arg(uuidStringWithoutCurlyBraces(getID()));
-#if DEV_BUILD || PR_BUILD
-    qDebug() << "Domain metadata sent to" << path;
-    qDebug() << "Domain metadata update:" << domainUpdateJSON;
-#endif
-    DependencyManager::get<AccountManager>()->sendRequest(path,
+    DependencyManager::get<AccountManager>()->sendRequest(DOMAIN_UPDATE.arg(uuidStringWithoutCurlyBraces(getID())),
                                               AccountManagerAuth::Optional,
                                               QNetworkAccessManager::PutOperation,
                                               JSONCallbackParameters(nullptr, QString(), this, "handleMetaverseHeartbeatError"),
