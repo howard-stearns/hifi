@@ -1,6 +1,6 @@
 "use strict";
 /*jslint vars: true, plusplus: true, forin: true*/
-/*globals Script, AvatarList, Users, Entities, MyAvatar, Camera, Overlays, OverlayWindow, Toolbars, Vec3, Quat, Controller, Messages, Window, print, getControllerWorldLocation, textures, removeOverlays, populateUserList */
+/*globals Script, AvatarList, Users, Entities, MyAvatar, Camera, Overlays, OverlayWindow, Toolbars, Vec3, Quat, Controller, Messages, Window, HMD, print, getControllerWorldLocation, textures, removeOverlays, populateUserList */
 //
 // pal.js
 //
@@ -256,9 +256,39 @@ function usernameFromIDReply(id, username, machineFingerprint) {
     pal.sendToQml({ method: 'updateUsername', params: data });
 }
 
+function projectVectorOntoPlane(normalizedVector, planeNormal) {
+    return Vec3.cross(planeNormal, Vec3.cross(normalizedVector, planeNormal));
+}
+function angleBetweenVectorsInPlane(from, to, normal) {
+    var projectedFrom = projectVectorOntoPlane(from, normal);
+    var projectedTo = projectVectorOntoPlane(to, normal);
+    return Vec3.orientedAngle(projectedFrom, projectedTo, normal);
+}
+
+function clampedTarget(eye, forward, up, right, target, maxHorizontal, maxVertical) {
+    var vector = Vec3.subtract(target, eye);
+    var distance = Vec3.length(vector);
+    var normalizedVector = Vec3.multiply(1 / distance, vector);
+    var horizontalAngle = angleBetweenVectorsInPlane(forward, normalizedVector, up);
+    var verticalAngle =  angleBetweenVectorsInPlane(forward, normalizedVector, right);
+    var clampedHorizontalAngle = Math.min(Math.max(-maxHorizontal, horizontalAngle), maxHorizontal);
+    var clampedVerticalAngle = Math.min(Math.max(-maxVertical, verticalAngle), maxVertical);
+    var clampedDirection = Vec3.multiplyQbyV(Quat.multiply(Quat.angleAxis(clampedHorizontalAngle, up), Quat.angleAxis(clampedVerticalAngle, right)), forward);
+    return Vec3.sum(eye, Vec3.multiply(distance, clampedDirection));
+}
+
+
 var pingPong = true;
 function updateOverlays() {
     var eye = Camera.position;
+
+    var viewer = Camera.orientation;
+    var forward = Quat.getFront(viewer);
+    var up = Quat.getUp(viewer);
+    var right = Quat.getRight(viewer);
+    var MAX_HORIZONTAL_ANGLE = HMD.active ? 35 : 34; // degrees
+    var MAX_VERTICAL_ANGLE = HMD.active ? 20 : 18;
+
     AvatarList.getAvatarIdentifiers().forEach(function (id) {
         if (!id) {
             return; // don't update ourself
@@ -289,6 +319,8 @@ function updateOverlays() {
         // now bump it up a bit
         target.y = target.y + offset;
 
+        target = clampedTarget(eye, forward, up, right, target, MAX_HORIZONTAL_ANGLE, MAX_VERTICAL_ANGLE);
+
         overlay.ping = pingPong;
         overlay.editOverlay({
             position: target,
@@ -299,7 +331,7 @@ function updateOverlays() {
             overlay.model.editOverlay({
                 position: target,
                 scale: 0.2 * distance, // constant apparent size
-                rotation: Camera.orientation
+                rotation: viewer
             });
         }
     });
