@@ -1,6 +1,6 @@
 "use strict";
 /*jslint vars: true, plusplus: true, forin: true*/
-/*globals Script, AvatarList, Users, Entities, MyAvatar, Camera, Overlays, OverlayWindow, Toolbars, Vec3, Quat, Controller, Messages, Window, HMD, print, getControllerWorldLocation, textures, removeOverlays, populateUserList */
+/*globals Script, AvatarList, Users, Entities, MyAvatar, Camera, Overlays, OverlayWindow, Toolbars, Vec3, Quat, Controller, Messages, Window, HMD, Account, print, getControllerWorldLocation, textures, removeOverlays, populateUserList */
 //
 // pal.js
 //
@@ -214,15 +214,16 @@ function populateUserList() {
     var data = [];
     AvatarList.getAvatarIdentifiers().sort().forEach(function (id) { // sorting the identifiers is just an aid for debugging
         var avatar = AvatarList.getAvatar(id);
+        if (MyAvatar.sessionUUID === id) { // defensive programming against plausible future changes
+            id = '';
+        }
         var avatarPalDatum = {
             displayName: avatar.sessionDisplayName,
-            userName: '',
+            userName: (id ? '' : Account.username),
             sessionId: id || '',
             audioLevel: 0.0
         };
-        // If the current user is an admin OR
-        // they're requesting their own username ("id" is blank)...
-        if (Users.canKick || !id) {
+        if (Users.canKick && id) { // not for myself
             // Request the username from the given UUID
             Users.requestUsernameFromID(id);
         }
@@ -241,16 +242,9 @@ function populateUserList() {
 
 // The function that handles the reply from the server
 function usernameFromIDReply(id, username, machineFingerprint) {
-    var data;
-    // If the ID we've received is our ID...
-    if (MyAvatar.sessionUUID === id) {
-        // Set the data to contain specific strings.
-        data = ['', username];
-    } else {
-        // Set the data to contain the ID and the username (if we have one)
-        // or fingerprint (if we don't have a username) string.
-        data = [id, username || machineFingerprint];
-    }
+    // Set the data to contain the ID and the username (if we have one)
+    // or fingerprint (if we don't have a username) string.
+    var data = [id, username || machineFingerprint];
     print('Username Data:', JSON.stringify(data));
     // Ship the data off to QML
     pal.sendToQml({ method: 'updateUsername', params: data });
