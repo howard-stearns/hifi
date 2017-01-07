@@ -1,6 +1,6 @@
 "use strict";
 /*jslint vars: true, plusplus: true, forin: true*/
-/*globals Script, AvatarList, Users, Entities, MyAvatar, Camera, Overlays, OverlayWindow, Toolbars, Vec3, Quat, Controller, print, getControllerWorldLocation */
+/*globals Script, AvatarList, Users, Entities, MyAvatar, Camera, Overlays, OverlayWindow, Toolbars, Vec3, Quat, Controller, Messages, Window, print, getControllerWorldLocation, textures, removeOverlays, populateUserList */
 //
 // pal.js
 //
@@ -13,11 +13,13 @@
 
 // hardcoding these as it appears we cannot traverse the originalTextures in overlays???  Maybe I've missed 
 // something, will revisit as this is sorta horrible.
-const UNSELECTED_TEXTURES = {"idle-D": Script.resolvePath("./assets/models/Avatar-Overlay-v1.fbx/Avatar-Overlay-v1.fbm/avatar-overlay-idle.png"),
-                             "idle-E": Script.resolvePath("./assets/models/Avatar-Overlay-v1.fbx/Avatar-Overlay-v1.fbm/avatar-overlay-idle.png")
+const UNSELECTED_TEXTURES = {
+    "idle-D": Script.resolvePath("./assets/models/Avatar-Overlay-v1.fbx/Avatar-Overlay-v1.fbm/avatar-overlay-idle.png"),
+    "idle-E": Script.resolvePath("./assets/models/Avatar-Overlay-v1.fbx/Avatar-Overlay-v1.fbm/avatar-overlay-idle.png")
 };
-const SELECTED_TEXTURES = { "idle-D": Script.resolvePath("./assets/models/Avatar-Overlay-v1.fbx/Avatar-Overlay-v1.fbm/avatar-overlay-selected.png"),
-                            "idle-E": Script.resolvePath("./assets/models/Avatar-Overlay-v1.fbx/Avatar-Overlay-v1.fbm/avatar-overlay-selected.png")
+const SELECTED_TEXTURES = {
+    "idle-D": Script.resolvePath("./assets/models/Avatar-Overlay-v1.fbx/Avatar-Overlay-v1.fbm/avatar-overlay-selected.png"),
+    "idle-E": Script.resolvePath("./assets/models/Avatar-Overlay-v1.fbx/Avatar-Overlay-v1.fbm/avatar-overlay-selected.png")
 };
 
 const UNSELECTED_COLOR = { red: 0x1F, green: 0xC6, blue: 0xA6};
@@ -70,7 +72,7 @@ ExtendedOverlay.prototype.select = function (selected) {
     if (this.selected === selected) {
         return;
     }
-    
+
     this.editOverlay({color: color(selected)});
     if (this.model) {
         this.model.editOverlay({textures: textures(selected)});
@@ -200,12 +202,13 @@ pal.fromQml.connect(function (message) { // messages are {method, params}, like 
 //
 function addAvatarNode(id) {
     var selected = ExtendedOverlay.isSelected(id);
-    return new ExtendedOverlay(id, "sphere", { 
-         drawInFront: true, 
-         solid: true, 
-         alpha: 0.8, 
-         color: color(selected), 
-         ignoreRayIntersection: false}, selected, true);
+    return new ExtendedOverlay(id, "sphere", {
+        drawInFront: true,
+        solid: true,
+        alpha: 0.8,
+        color: color(selected),
+        ignoreRayIntersection: false
+    }, selected, true);
 }
 function populateUserList() {
     var data = [];
@@ -226,8 +229,8 @@ function populateUserList() {
         // Request personal mute status and ignore status
         // from NodeList (as long as we're not requesting it for our own ID)
         if (id) {
-            avatarPalDatum['personalMute'] = Users.getPersonalMuteStatus(id);
-            avatarPalDatum['ignore'] = Users.getIgnoreStatus(id);
+            avatarPalDatum.personalMute = Users.getPersonalMuteStatus(id);
+            avatarPalDatum.ignore = Users.getIgnoreStatus(id);
             addAvatarNode(id); // No overlay for ourselves
         }
         data.push(avatarPalDatum);
@@ -260,7 +263,7 @@ function updateOverlays() {
         if (!id) {
             return; // don't update ourself
         }
-        
+
         var overlay = ExtendedOverlay.get(id);
         if (!overlay) { // For now, we're treating this as a temporary loss, as from the personal space bubble. Add it back.
             print('Adding non-PAL avatar node', id);
@@ -270,7 +273,7 @@ function updateOverlays() {
         var target = avatar.position;
         var distance = Vec3.distance(target, eye);
         var offset = 0.2;
-        
+
         // base offset on 1/2 distance from hips to head if we can
         var headIndex = avatar.getJointIndex("Head");
         if (headIndex > 0) {
@@ -279,7 +282,7 @@ function updateOverlays() {
 
         // get diff between target and eye (a vector pointing to the eye from avatar position)
         var diff = Vec3.subtract(target, eye);
-        
+
         // move a bit in front, towards the camera
         target = Vec3.subtract(target, Vec3.multiply(Vec3.normalize(diff), offset));
 
@@ -289,12 +292,12 @@ function updateOverlays() {
         overlay.ping = pingPong;
         overlay.editOverlay({
             position: target,
-            dimensions: 0.032 * distance 
+            dimensions: 0.032 * distance
         });
         if (overlay.model) {
             overlay.model.ping = pingPong;
             overlay.model.editOverlay({
-                position: target, 
+                position: target,
                 scale: 0.2 * distance, // constant apparent size
                 rotation: Camera.orientation
             });
@@ -397,8 +400,7 @@ function onClicked() {
 //
 var CHANNEL = 'com.highfidelity.pal';
 function receiveMessage(channel, messageString, senderID) {
-    if ((channel !== CHANNEL) ||
-        (senderID !== MyAvatar.sessionUUID)) {
+    if ((channel !== CHANNEL) || (senderID !== MyAvatar.sessionUUID)) {
         return;
     }
     var message = JSON.parse(messageString);
