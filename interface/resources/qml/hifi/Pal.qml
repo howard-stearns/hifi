@@ -187,6 +187,8 @@ Item {
                 imageUrl: (model && model.imageUrl) || '' // a string
                 audioLevel: model && model.audioLevel
                 visible: !isCheckBox && !isButton
+                imageAction: goToUser
+                imageActionTarget: model.sessionId
                 // Size
                 width: nameCardWidth
                 height: parent.height
@@ -381,6 +383,9 @@ Item {
         id: letterboxMessage
     }
 
+    function goToUser(sessionId, displayName) {
+        pal.sendToScript({method: 'goto', params: {id: sessionId, displayName: displayName}});
+    }
     function findSessionIndex(sessionId, optionalData) { // no findIndex in .qml
         var data = optionalData || userModelData, length = data.length;
         for (var i = 0; i < length; i++) {
@@ -434,7 +439,6 @@ Item {
         // Received an "updateUsername()" request from the JS
         case 'updateUsername':
             var data, model, userId = message.params.id;
-            console.log('fixme updateUsername', JSON.stringify(message.params));
             if (!userId) {
                 data = myData;
                 model = myCard;
@@ -448,7 +452,7 @@ Item {
                     break;
                 }
             }
-            if (message.params.userName) {
+            if (message.params.username) {
                 data.userName = message.params.username;
                 model.userName = message.params.username;
             }

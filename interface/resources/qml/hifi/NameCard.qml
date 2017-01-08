@@ -36,6 +36,8 @@ Row {
     property real audioLevel: 0.0
     property string defaultImage: "../../icons/defaultNameCardUser.png"
     property string  imageUrl: ""
+    property var imageAction: function() { }
+    property string imageActionTarget: ''
 
     Rectangle { // containing rectangle with specific width
         width: contentHeight
@@ -61,6 +63,10 @@ Row {
             color: "transparent"
             border.color: "white"
             border.width: contentHeight / 2.0
+        }
+        MouseArea {
+            anchors.fill: parent
+            onClicked: imageAction(imageActionTarget, displayName)
         }
     }
     Column {

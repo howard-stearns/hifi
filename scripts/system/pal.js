@@ -188,6 +188,22 @@ pal.fromQml.connect(function (message) { // messages are {method, params}, like 
             });
         }
         break;
+    case 'goto':
+        var avatar = AvatarList.getAvatar(message.params.id);
+        if (!avatar) {
+            Window.alert(message.params.displayName + " is no longer present.");
+            break;
+        }
+        var vector = Vec3.subtract(avatar.position, MyAvatar.position);
+        var distance = Vec3.length(vector);
+        var target = Vec3.multiply(Vec3.normalize(vector), distance - 2.0);
+        // FIXME: We would like the avatar to recompute the avatar's "maybe fly" test at the new position, so that if high enough up,
+        // the avatar goes into fly mode rather than falling. However, that is not exposed to Javascript right now.
+        // FIXME: it would be nice if this used the same teleport steps and smoothing as in the teleport.js script.
+        // Note, however, that this script allows teleporting to a person in the air, while teleport.js is going to a grounded target.
+        MyAvatar.orientation = Quat.lookAtSimple(MyAvatar.position, avatar.position);
+        MyAvatar.position = Vec3.sum(MyAvatar.position, target);
+        break;
     case 'refresh':
         removeOverlays();
         populateUserList();
