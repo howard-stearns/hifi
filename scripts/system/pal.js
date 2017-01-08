@@ -223,6 +223,17 @@ function request(url, callback) { // cb(error, responseOfCorrectContentType) of 
     httpRequest.open("GET", url, true);
     httpRequest.send();
 }
+function getProfilePicture(username, callback) { // callback(url) if successfull. (Logs otherwise)
+    // FIXME Prototype scrapes profile picture. We should include in user status, and also make available somewhere for myself
+    request('https://highfidelity.com/users/' + username, function (error, html) {
+        var matched = !error && html.match(/img class="users-img" src="([^"]*)"/);
+        if (!matched) {
+            print('Error: Unable to get profile picture for', username, error);
+            return;
+        }
+        callback(matched[1]);
+    });
+}
 function getUsernames() { // Update all the usernames that I am entitled to see, using my login but not dependent on canKick.
     var domain = location.domainId;
 
@@ -260,7 +271,7 @@ function getUsernames() { // Update all the usernames that I am entitled to see,
             }
         });
 
-        users.forEach(function (user) { pal.sendToQml({ method: 'updateUsername', params: [user.location.sessionUUID, user.username] }); });
+        users.forEach(function (user) { pal.sendToQml({ method: 'updateUsername', params: {id: user.location.sessionUUID, username: user.username} }); });
     });
 }
 
@@ -293,6 +304,8 @@ function populateUserList() {
         if (Users.canKick && id) { // not for myself
             // Request the username from the given UUID
             Users.requestUsernameFromID(id);
+        } else if (!id) {
+            getProfilePicture(Account.username, function (url) { pal.sendToQml({ method: 'updateUsername', params: {profileUrl: url} }); });
         }
         // Request personal mute status and ignore status
         // from NodeList (as long as we're not requesting it for our own ID)
@@ -314,7 +327,7 @@ function populateUserList() {
 function usernameFromIDReply(id, username, machineFingerprint) {
     // Set the data to contain the ID and the username (if we have one)
     // or fingerprint (if we don't have a username) string.
-    var data = [id, username || machineFingerprint];
+    var data = {id: id, username: username || machineFingerprint};
     print('Username Data:', JSON.stringify(data));
     // Ship the data off to QML
     pal.sendToQml({ method: 'updateUsername', params: data });

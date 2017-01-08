@@ -34,26 +34,39 @@ Row {
     property int displayTextHeight: 18
     property int usernameTextHeight: 12
     property real audioLevel: 0.0
+    property string defaultImage: "../../icons/defaultNameCardUser.png"
+    property string  imageUrl: ""
 
-    /* User image commented out for now - will probably be re-introduced later.
-    Column {
-        id: avatarImage
-        // Size
+    Rectangle { // containing rectangle with specific width
+        width: contentHeight
         height: contentHeight
-        width: height
+        clip: true
+        id: avatarImage
         Image {
             id: userImage
-            source: "../../icons/defaultNameCardUser.png"
-            // Anchors
-            width: parent.width
-            height: parent.height
+            source: imageUrl || defaultImage
+            anchors.fill: parent
+        }
+        // I can't get OpacityMask to work, so I'm instead masking off the corners with the  border of of a too-big
+        // rounded rectangle, and clipping the too-big rectangle by its parent. -HRS
+        Rectangle {
+            id: mask
+            anchors {
+                horizontalCenter: userImage.horizontalCenter
+                verticalCenter: userImage.verticalCenter
+            }
+            width: contentHeight * 2
+            height: contentHeight * 2
+            radius: contentHeight
+            color: "transparent"
+            border.color: "white"
+            border.width: contentHeight / 2.0
         }
     }
-    */
     Column {
         id: textContainer
         // Size
-        width: parent.width - /*avatarImage.width - */parent.anchors.leftMargin - parent.anchors.rightMargin - parent.spacing
+        width: parent.width - avatarImage.width - parent.anchors.leftMargin - parent.anchors.rightMargin - parent.spacing
         height: contentHeight
 
         // DisplayName Text

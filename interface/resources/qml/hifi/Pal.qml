@@ -184,6 +184,7 @@ Item {
                 // Properties
                 displayName: styleData.value
                 userName: model && model.userName
+                imageUrl: (model && model.imageUrl) || '' // a string
                 audioLevel: model && model.audioLevel
                 visible: !isCheckBox && !isButton
                 // Size
@@ -432,24 +433,28 @@ Item {
             break;
         // Received an "updateUsername()" request from the JS
         case 'updateUsername':
-            // The User ID (UUID) is the first parameter in the message.
-            var userId = message.params[0];
-            // The text that goes in the userName field is the second parameter in the message.
-            var userName = message.params[1];
-            // If the userId is empty, we're updating "myData".
+            var data, model, userId = message.params.id;
+            console.log('fixme updateUsername', JSON.stringify(message.params));
             if (!userId) {
-                myData.userName = userName;
-                myCard.userName = userName; // Defensive programming
+                data = myData;
+                model = myCard;
             } else {
-                // Get the index in userModel and userModelData associated with the passed UUID
                 var userIndex = findSessionIndex(userId);
-                if (userIndex != -1) {
-                    // Set the userName appropriately
-                    userModel.setProperty(userIndex, "userName", userName);
-                    userModelData[userIndex].userName = userName; // Defensive programming
+                if (userIndex !== -1) {
+                    data = userModelData[userIndex];
+                    model = userModel.get(userIndex);
                 } else {
                     console.log("updateUsername() called with unknown UUID: ", userId);
+                    break;
                 }
+            }
+            if (message.params.userName) {
+                data.userName = message.params.username;
+                model.userName = message.params.username;
+            }
+            if (message.params.profileUrl) {
+                data.imageUrl = message.params.profileUrl;
+                model.imageUrl = message.params.profileUrl;
             }
             break;
         case 'updateAudioLevel': 
