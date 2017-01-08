@@ -1,6 +1,6 @@
 "use strict";
 /*jslint vars: true, plusplus: true, forin: true*/
-/*globals Script, AvatarList, Users, Entities, MyAvatar, Camera, Overlays, OverlayWindow, Toolbars, Vec3, Quat, Controller, Messages, Window, HMD, Account, print, getControllerWorldLocation, textures, removeOverlays, populateUserList */
+/*globals Script, AvatarList, Users, Entities, MyAvatar, Camera, Overlays, OverlayWindow, Toolbars, Vec3, Quat, Controller, Messages, Window, HMD, Account, XMLHttpRequest, print, location, getControllerWorldLocation, textures, removeOverlays, populateUserList */
 //
 // pal.js
 //
@@ -198,6 +198,73 @@ pal.fromQml.connect(function (message) { // messages are {method, params}, like 
 });
 
 //
+// Usernames when I'm not admin
+//
+function request(url, callback) { // cb(error, responseOfCorrectContentType) of url. General for 'get' text/html/json, but without redirects.
+    var httpRequest = new XMLHttpRequest();
+    // QT bug: apparently doesn't handle onload. Workaround using readyState.
+    httpRequest.onreadystatechange = function () {
+        var READY_STATE_DONE = 4;
+        var HTTP_OK = 200;
+        if (httpRequest.readyState >= READY_STATE_DONE) {
+            var error = (httpRequest.status !== HTTP_OK) && httpRequest.status.toString() + ':' + httpRequest.statusText,
+                response = !error && httpRequest.responseText,
+                contentType = !error && httpRequest.getResponseHeader('content-type');
+            if (!error && contentType.indexOf('application/json') === 0) {
+                try {
+                    response = JSON.parse(response);
+                } catch (e) {
+                    error = e;
+                }
+            }
+            callback(error, response);
+        }
+    };
+    httpRequest.open("GET", url, true);
+    httpRequest.send();
+}
+function getUsernames() { // Update all the usernames that I am entitled to see, using my login but not dependent on canKick.
+    var domain = location.domainId;
+
+    // FIXME: Prototype approximates avatar id by finding the one closest to users status path. Real answer is to store sessionID in /api/v1/user/location update
+    var positions = {};
+    AvatarList.getAvatarIdentifiers().forEach(function (id) { positions[id] = AvatarList.getAvatar(id).position; });
+    print('requesting usernames with positions', JSON.stringify(positions));
+
+    request('https://metaverse.highfidelity.com/api/v1/users?status=online', function (error, response) {
+        if (error || (response.status !== 'success')) {
+            print("Error: unable to get usernames: ", error || response.status);
+            return;
+        }
+        var users = response.data.users || [];
+
+        // FIXME: Prototype filters results by domainID. Request should take domainId filter for scalability.
+        domain = domain.slice(1, -1); // without curly braces
+        print('user status responsed with', users.length, 'users');
+        print('our domain', domain);
+        users = users.filter(function (user) { var root = user.location.domain || user.location.root.domain; print(JSON.stringify(root)); return root.id === domain; });
+        print('user status filtered', JSON.stringify(users));
+        users.forEach(function (user) {
+            var coordinates = user.location.path.match(/\/([^,]+)\,([^,]+),([^\/]+)\//);
+            if (coordinates) {
+                var position = {x: Number(coordinates[1]), y: Number(coordinates[2]), z: Number(coordinates[3])};
+                var id, closestId = 'not found', bestDistance = Infinity, distance;
+                for (id in positions) {
+                    distance = Vec3.distance(position, positions[id]);
+                    if (distance < bestDistance) {
+                        closestId = id;
+                        bestDistance = distance;
+                    }
+                }
+                user.location.sessionUUID = closestId;
+            }
+        });
+
+        users.forEach(function (user) { pal.sendToQml({ method: 'updateUsername', params: [user.location.sessionUUID, user.username] }); });
+    });
+}
+
+//
 // Main operations.
 //
 function addAvatarNode(id) {
@@ -238,6 +305,9 @@ function populateUserList() {
         print('PAL data:', JSON.stringify(avatarPalDatum));
     });
     pal.sendToQml({method: 'users', params: data});
+    if (!Users.canKick) { // admins request for each user, above
+        getUsernames();
+    }
 }
 
 // The function that handles the reply from the server
