@@ -250,6 +250,9 @@ function getProfilePicture(username, callback) { // callback(url) if successfull
         callback(matched[1]);
     });
 }
+function updatePicture(id, username) { // Often used with another updateUsername. Is it worth trying to reduce messsages?
+    getProfilePicture(username, function (url) { pal.sendToQml({ method: 'updateUsername', params: {id: id, profileUrl: url} }); });
+}
 function getUsernames() { // Update all the usernames that I am entitled to see, using my login but not dependent on canKick.
     var domain = location.domainId;
 
@@ -287,7 +290,11 @@ function getUsernames() { // Update all the usernames that I am entitled to see,
             }
         });
 
-        users.forEach(function (user) { pal.sendToQml({ method: 'updateUsername', params: {id: user.location.sessionUUID, username: user.username} }); });
+        users.forEach(function (user) {
+            var id = user.location.sessionUUID;
+            updatePicture(id, user.username);
+            pal.sendToQml({ method: 'updateUsername', params: {id: id, username: user.username} });
+        });
     });
 }
 
@@ -321,7 +328,7 @@ function populateUserList() {
             // Request the username from the given UUID
             Users.requestUsernameFromID(id);
         } else if (!id) {
-            getProfilePicture(Account.username, function (url) { pal.sendToQml({ method: 'updateUsername', params: {profileUrl: url} }); });
+            updatePicture('', Account.username);
         }
         // Request personal mute status and ignore status
         // from NodeList (as long as we're not requesting it for our own ID)
@@ -345,6 +352,7 @@ function usernameFromIDReply(id, username, machineFingerprint) {
     // or fingerprint (if we don't have a username) string.
     var data = {id: id, username: username || machineFingerprint};
     print('Username Data:', JSON.stringify(data));
+    updatePicture(id, username);
     // Ship the data off to QML
     pal.sendToQml({ method: 'updateUsername', params: data });
 }
