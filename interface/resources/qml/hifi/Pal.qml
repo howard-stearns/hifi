@@ -30,6 +30,7 @@ Item {
     property var ignored: ({}); // Keep a local list of ignored avatars & their data. Necessary because HashMap is slow to respond after ignoring.
     property var userModelData: [] // This simple list is essentially a mirror of the userModel listModel without all the extra complexities.
     property bool iAmAdmin: false
+    HifiConstants { id: hifi }
 
     // This contains the current user's NameCard and will contain other information in the future
     Rectangle {
@@ -167,9 +168,8 @@ Item {
         rowDelegate: Rectangle { // The only way I know to specify a row height.
             // Size
             height: rowHeight
-            color: styleData.selected
-                   ? "#afafaf"
-                   : styleData.alternate ? hifi.colors.tableRowLightEven : hifi.colors.tableRowLightOdd
+            id: row
+            color: rowColor(styleData.selected, styleData.alternate)
         }
 
         // This Item refers to the contents of each Cell
@@ -189,6 +189,7 @@ Item {
                 visible: !isCheckBox && !isButton
                 imageAction: goToUser
                 imageActionTarget: model.sessionId
+                imageMaskColor: rowColor(styleData.selected, styleData.row % 2)
                 // Size
                 width: nameCardWidth
                 height: parent.height
@@ -383,6 +384,11 @@ Item {
         id: letterboxMessage
     }
 
+    function rowColor(selected, alternate) {
+        return selected
+            ? "#afafaf"
+            : alternate ? hifi.colors.tableRowLightEven : hifi.colors.tableRowLightOdd;
+    }
     function goToUser(sessionId, displayName) {
         pal.sendToScript({method: 'goto', params: {id: sessionId, displayName: displayName}});
     }

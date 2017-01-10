@@ -38,6 +38,7 @@ Row {
     property string  imageUrl: ""
     property var imageAction: function() { }
     property string imageActionTarget: ''
+    property string imageMaskColor: "white"
 
     Rectangle { // containing rectangle with specific width
         width: contentHeight
@@ -61,7 +62,7 @@ Row {
             height: contentHeight * 2
             radius: contentHeight
             color: "transparent"
-            border.color: "white"
+            border.color: imageMaskColor
             border.width: contentHeight / 2.0
         }
         MouseArea {
