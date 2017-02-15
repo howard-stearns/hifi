@@ -13,6 +13,8 @@
 
 (function() { // BEGIN LOCAL_SCOPE
 
+const MODEL_URL = Script.resolvePath("./assets/models/Avatar-Overlay-v1.fbx");
+
 // hardcoding these as it appears we cannot traverse the originalTextures in overlays???  Maybe I've missed 
 // something, will revisit as this is sorta horrible.
 const UNSELECTED_TEXTURES = {"idle-D": Script.resolvePath("./assets/models/Avatar-Overlay-v1.fbx/Avatar-Overlay-v1.fbm/avatar-overlay-idle.png"),
@@ -38,18 +40,8 @@ Script.include("/~/system/libraries/controllers.js");
 //
 var overlays = {}; // Keeps track of all our extended overlay data objects, keyed by target identifier.
 
-function ExtendedOverlay(key, type, properties, selected, hasModel) { // A wrapper around overlays to store the key it is associated with.
+function ExtendedOverlay(key, type, properties, selected) { // A wrapper around overlays to store the key it is associated with.
     overlays[key] = this;
-    if (hasModel) {
-        var modelKey = key + "-m";
-        this.model = new ExtendedOverlay(modelKey, "model", {
-            url: Script.resolvePath("./assets/models/Avatar-Overlay-v1.fbx"),
-            textures: textures(selected),
-            ignoreRayIntersection: true
-        }, false, false);
-    } else {
-        this.model = undefined;
-    }
     this.key = key;
     this.selected = selected || false; // not undefined
     this.hovering = false;
@@ -88,10 +80,7 @@ ExtendedOverlay.prototype.hover = function (hovering) {
             lastHoveringId = 0;
         }
     } 
-    this.editOverlay({color: color(this.selected, hovering, this.audioLevel)});
-    if (this.model) {
-        this.model.editOverlay({textures: textures(this.selected, hovering)});
-    }
+    this.editOverlay({textures: textures(this.selected, hovering)});
     if (hovering) {
         // un-hover the last hovering overlay
         if (lastHoveringId && lastHoveringId != this.key) {
@@ -107,10 +96,7 @@ ExtendedOverlay.prototype.select = function (selected) {
     
     UserActivityLogger.palAction(selected ? "avatar_selected" : "avatar_deselected", this.key);
 
-    this.editOverlay({color: color(selected, this.hovering, this.audioLevel)});
-    if (this.model) {
-        this.model.editOverlay({textures: textures(selected)});
-    }
+    this.editOverlay({textures: textures(selected)});
     this.selected = selected;
 };
 // Class methods:
@@ -273,15 +259,16 @@ function sendToQml(message) {
 //
 function addAvatarNode(id) {
     var selected = ExtendedOverlay.isSelected(id);
-    return new ExtendedOverlay(id, "sphere", { 
+    return new ExtendedOverlay(id, "model", {
+        url: MODEL_URL,
+        textures: textures(selected),
+        ignoreRayIntersection: false,
         drawInFront: true,
-        solid: true,
-        alpha: 0.8,
-        color: color(selected, false, 0.0),
-        ignoreRayIntersection: false}, selected, !conserveResources);
+        ignoreRayIntersection: false
+    }, selected);
 }
 function populateUserList(selectData) {
-    var data = [], avatars = AvatarList.getAvatarIdentifiers();
+    var data = [], avatars = AvatarList.getAvatarIdentifiers(), iAmAdmin = Users.canKick;
     conserveResources = avatars.length > 20;
     avatars.forEach(function (id) { // sorting the identifiers is just an aid for debugging
         var avatar = AvatarList.getAvatar(id);
@@ -293,8 +280,9 @@ function populateUserList(selectData) {
             admin: false
         };
         // Request the username, fingerprint, and admin status from the given UUID
-        // Username and fingerprint returns default constructor output if the requesting user isn't an admin
-        Users.requestUsernameFromID(id);
+        if (iAmAdmin) {
+            Users.requestUsernameFromID(id);
+        }
         // Request personal mute status and ignore status
         // from NodeList (as long as we're not requesting it for our own ID)
         if (id) {
@@ -341,11 +329,13 @@ function updateOverlays() {
         }
         
         var overlay = ExtendedOverlay.get(id);
-        if (!overlay) { // For now, we're treating this as a temporary loss, as from the personal space bubble. Add it back.
+        var avatar = AvatarList.getAvatar(id);
+        if (!avatar) {
+            return;
+        } else if (!overlay) { // For now, we're treating this as a temporary loss, as from the personal space bubble. Add it back.
             print('Adding non-PAL avatar node', id);
             overlay = addAvatarNode(id);
         }
-        var avatar = AvatarList.getAvatar(id);
         var target = avatar.position;
         var distance = Vec3.distance(target, eye);
         var offset = 0.2;
@@ -367,18 +357,10 @@ function updateOverlays() {
 
         overlay.ping = pingPong;
         overlay.editOverlay({
-            color: color(ExtendedOverlay.isSelected(id), overlay.hovering, overlay.audioLevel),
             position: target,
-            dimensions: 0.032 * distance 
+            scale: 0.2 * distance, // constant apparent size
+            rotation: Camera.orientation
         });
-        if (overlay.model) {
-            overlay.model.ping = pingPong;
-            overlay.model.editOverlay({
-                position: target, 
-                scale: 0.2 * distance, // constant apparent size
-                rotation: Camera.orientation
-            });
-        }
     });
     pingPong = !pingPong;
     ExtendedOverlay.some(function (overlay) { // Remove any that weren't updated. (User is gone.)
