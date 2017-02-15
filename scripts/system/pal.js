@@ -27,10 +27,6 @@ const HOVER_TEXTURES = { "idle-D": Script.resolvePath("./assets/models/Avatar-Ov
                          "idle-E": Script.resolvePath("./assets/models/Avatar-Overlay-v1.fbx/Avatar-Overlay-v1.fbm/avatar-overlay-hover.png")
 };
 
-const UNSELECTED_COLOR = { red: 0x1F, green: 0xC6, blue: 0xA6};
-const SELECTED_COLOR = {red: 0xF3, green: 0x91, blue: 0x29};
-const HOVER_COLOR = {red: 0xD0, green: 0xD0, blue: 0xD0}; // almost white for now
-
 var conserveResources = true;
 
 Script.include("/~/system/libraries/controllers.js");
@@ -56,15 +52,6 @@ ExtendedOverlay.prototype.deleteOverlay = function () { // remove display and da
 ExtendedOverlay.prototype.editOverlay = function (properties) { // change display of this overlay
     Overlays.editOverlay(this.activeOverlay, properties);
 };
-
-function color(selected, hovering, level) {
-    var base = hovering ? HOVER_COLOR : selected ? SELECTED_COLOR : UNSELECTED_COLOR;
-    function scale(component) {
-        var delta = 0xFF - component;
-        return component + (delta * level);
-    }
-    return {red: scale(base.red), green: scale(base.green), blue: scale(base.blue)};
-}
 
 function textures(selected, hovering) {
     return hovering ? HOVER_TEXTURES : selected ? SELECTED_TEXTURES : UNSELECTED_TEXTURES;
