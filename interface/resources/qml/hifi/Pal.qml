@@ -2,7 +2,7 @@
 //  Pal.qml
 //  qml/hifi
 //
-//  People Action List 
+//  People Action List
 //
 //  Created by Howard Stearns on 12/12/2016
 //  Copyright 2016 High Fidelity, Inc.
@@ -13,6 +13,7 @@
 
 import QtQuick 2.5
 import QtQuick.Controls 1.4
+import QtGraphicalEffects 1.0
 import Qt.labs.settings 1.0
 import "../styles-uit"
 import "../controls-uit" as HifiControls
@@ -33,7 +34,7 @@ Rectangle {
     property int actionButtonAllowance: actionButtonWidth * 2
     property int minNameCardWidth: palContainer.width - (actionButtonAllowance * 2) - 4 - hifi.dimensions.scrollbarBackgroundWidth
     property int nameCardWidth: minNameCardWidth + (iAmAdmin ? 0 : actionButtonAllowance)
-    property var myData: ({displayName: "", userName: "", audioLevel: 0.0, admin: true}) // valid dummy until set
+    property var myData: ({displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}) // valid dummy until set
     property var ignored: ({}); // Keep a local list of ignored avatars & their data. Necessary because HashMap is slow to respond after ignoring.
     property var userModelData: [] // This simple list is essentially a mirror of the userModel listModel without all the extra complexities.
     property bool iAmAdmin: false
@@ -99,6 +100,7 @@ Rectangle {
             displayName: myData.displayName
             userName: myData.userName
             audioLevel: myData.audioLevel
+            avgAudioLevel: myData.avgAudioLevel
             isMyCard: true
             // Size
             width: minNameCardWidth
@@ -197,17 +199,18 @@ Rectangle {
         onSortIndicatorOrderChanged: sortModel()
 
         TableViewColumn {
+            role: "avgAudioLevel"
+            title: "VOL"
+            width: actionButtonWidth
+            movable: false
+            resizable: false
+        }
+
+        TableViewColumn {
             id: displayNameHeader
             role: "displayName"
             title: table.rowCount + (table.rowCount === 1 ? " NAME" : " NAMES")
             width: nameCardWidth
-            movable: false
-            resizable: false
-        }
-        TableViewColumn {
-            role: "personalMute"
-            title: "MUTE"
-            width: actionButtonWidth
             movable: false
             resizable: false
         }
@@ -252,6 +255,8 @@ Rectangle {
             id: itemCell
             property bool isCheckBox: styleData.role === "personalMute" || styleData.role === "ignore"
             property bool isButton: styleData.role === "mute" || styleData.role === "kick"
+            property bool isAvgAudio: styleData.role === "avgAudioLevel"
+
             // This NameCard refers to the cell that contains an avatar's
             // DisplayName and UserName
             NameCard {
@@ -260,7 +265,8 @@ Rectangle {
                 displayName: styleData.value
                 userName: model ? model.userName : ""
                 audioLevel: model ? model.audioLevel : 0.0
-                visible: !isCheckBox && !isButton
+                avgAudioLevel: model ? model.avgAudioLevel : 0.0
+                visible: !isCheckBox && !isButton && !isAvgAudio
                 uuid: model ? model.sessionId : ""
                 selected: styleData.selected
                 isAdmin: model && model.admin
@@ -270,7 +276,29 @@ Rectangle {
                 // Anchors
                 anchors.left: parent.left
             }
-            
+            HifiControls.GlyphButton {
+                function getGlyph() {
+                    var fileName = "vol_";
+                    if (model["personalMute"]) {
+                        fileName += "x_";
+                    }
+                    fileName += (4.0*(model ? model.avgAudioLevel : 0.0)).toFixed(0);
+                    return hifi.glyphs[fileName];
+                }
+                id: avgAudioVolume
+                visible: isAvgAudio
+                glyph: getGlyph()
+                width: 32
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.horizontalCenter: parent.horizontalCenter
+                onClicked: {
+                    var newValue = !model["personalMute"];
+                    userModel.setProperty(model.userIndex, "personalMute", newValue)
+                    userModelData[model.userIndex]["personalMute"] = newValue // Defensive programming
+                    Users["personalMute"](model.sessionId, newValue)
+                    UserActivityLogger["palAction"](newValue ? "personalMute" : "un-personalMute", model.sessionId)
+                }
+            }
             // This CheckBox belongs in the columns that contain the stateful action buttons ("Mute" & "Ignore" for now)
             // KNOWN BUG with the Checkboxes: When clicking in the center of the sorting header, the checkbox
             // will appear in the "hovered" state. Hovering over the checkbox will fix it.
@@ -306,7 +334,7 @@ Rectangle {
                     checked = Qt.binding(function() { return (model[styleData.role])})
                 }
             }
-            
+
             // This Button belongs in the columns that contain the stateless action buttons ("Silence" & "Ban" for now)
             HifiControls.Button {
                 id: actionButton
@@ -314,7 +342,7 @@ Rectangle {
                 visible: isButton
                 anchors.centerIn: parent
                 width: 32
-                height: 24
+                height: 32
                 onClicked: {
                     Users[styleData.role](model.sessionId)
                     UserActivityLogger["palAction"](styleData.role, model.sessionId)
@@ -366,7 +394,7 @@ Rectangle {
         anchors.left: table.left
         anchors.top: table.top
         anchors.topMargin: 1
-        anchors.leftMargin: nameCardWidth/2 + displayNameHeaderMetrics.width/2 + 6
+        anchors.leftMargin: actionButtonWidth + nameCardWidth/2 + displayNameHeaderMetrics.width/2 + 6
         RalewayRegular {
             id: helpText
             text: "[?]"
@@ -538,23 +566,28 @@ Rectangle {
                 }
             }
             break;
-        case 'updateAudioLevel': 
+        case 'updateAudioLevel':
             for (var userId in message.params) {
-                var audioLevel = message.params[userId];
+                var audioLevel = message.params[userId][0];
+                var avgAudioLevel = message.params[userId][1];
                 // If the userId is 0, we're updating "myData".
                 if (userId == 0) {
                     myData.audioLevel = audioLevel;
                     myCard.audioLevel = audioLevel; // Defensive programming
+                    myData.avgAudioLevel = avgAudioLevel;
+                    myCard.avgAudioLevel = avgAudioLevel;
                 } else {
                     var userIndex = findSessionIndex(userId);
                     if (userIndex != -1) {
                         userModel.setProperty(userIndex, "audioLevel", audioLevel);
                         userModelData[userIndex].audioLevel = audioLevel; // Defensive programming
+                        userModel.setProperty(userIndex, "avgAudioLevel", avgAudioLevel);
+                        userModelData[userIndex].avgAudioLevel = avgAudioLevel;
                     }
                 }
             }
             break;
-        case 'clearLocalQMLData': 
+        case 'clearLocalQMLData':
             ignored = {};
             gainSliderValueDB = {};
             break;
