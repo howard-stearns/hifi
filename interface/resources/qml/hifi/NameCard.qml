@@ -37,26 +37,29 @@ Item {
     property bool isAdmin: false
     property bool currentlyEditingDisplayName: false
 
-    /* User image commented out for now - will probably be re-introduced later.
-    Column {
+    Item {
         id: avatarImage
         // Size
-        height: parent.height
+        height: isMyCard ? myDisplayName.height : 40
         width: height
+        anchors.left: parent.left
+        anchors.leftMargin: -10
+        anchors.verticalCenter: isMyCard ? undefined : parent.verticalCenter
         Image {
             id: userImage
             source: "../../icons/defaultNameCardUser.png"
             // Anchors
-            width: parent.width
-            height: parent.height
+            anchors.fill: parent
         }
     }
-    */
     Item {
         id: textContainer
         // Size
-        width: parent.width - /*avatarImage.width - parent.spacing - */parent.anchors.leftMargin - parent.anchors.rightMargin
+        width: parent.width - avatarImage.width - anchors.leftMargin - parent.anchors.leftMargin - parent.anchors.rightMargin
         height: selected || isMyCard ? childrenRect.height : childrenRect.height - 15
+        anchors.left: avatarImage.right
+        anchors.leftMargin: 5
+        anchors.top: parent.top
         anchors.verticalCenter: parent.verticalCenter
 
         // DisplayName field for my card
@@ -65,11 +68,10 @@ Item {
             visible: isMyCard
             // Size
             width: parent.width + 70
-            height: 35
+            height: 40
             // Anchors
             anchors.top: parent.top
             anchors.left: parent.left
-            anchors.leftMargin: -10
             // Style
             color: hifi.colors.textFieldLightBackground
             border.color: hifi.colors.blueHighlight
@@ -252,6 +254,15 @@ Item {
             verticalAlignment: Text.AlignVCenter
             // Style
             color: hifi.colors.baseGray
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.LeftButton
+                enabled: selected
+                hoverEnabled: true
+                onClicked: pal.sendToScript({method: 'goToUser', params: thisNameCard.userName});
+                onEntered: userNameText.color = hifi.colors.blueHighlight;
+                onExited: userNameText.color = hifi.colors.baseGray;
+            }
         }
 
         // Spacer

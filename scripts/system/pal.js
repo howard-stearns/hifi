@@ -266,6 +266,10 @@ function fromQml(message) { // messages are {method, params}, like json-rpc. See
             UserActivityLogger.palAction("display_name_change", "");
         }
         break;
+    case 'goToUser':
+        location.goToUser(message.params);
+        print('Unrecognized message from Pal.qml:', JSON.stringify(message));
+        break;
     default:
         print('Unrecognized message from Pal.qml:', JSON.stringify(message));
     }
@@ -337,6 +341,9 @@ function populateUserList(selectData, oldAudioData) {
             // Everyone needs to see admin status. Username and fingerprint returns default constructor output if the requesting user isn't an admin.
             Users.requestUsernameFromID(id);
             avatarsOfInterest[id] = true;
+        } else {
+            // Return our username from the Account API
+            avatarPalDatum.userName = Account.username;
         }
         data.push(avatarPalDatum);
         print('PAL data:', JSON.stringify(avatarPalDatum));
