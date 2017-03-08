@@ -40,7 +40,7 @@ Item {
     Item {
         id: avatarImage
         // Size
-        height: isMyCard ? myDisplayName.height : 40
+        height: isMyCard ? myDisplayName.height : 35
         width: height
         anchors.left: parent.left
         anchors.leftMargin: -10
@@ -163,6 +163,7 @@ Item {
             height: displayNameTextPixelSize + 4
             // Anchors
             anchors.top: parent.top
+            anchors.topMargin: 8
             anchors.left: parent.left
             // DisplayName Text for others' cards
             FiraSansSemiBold {
