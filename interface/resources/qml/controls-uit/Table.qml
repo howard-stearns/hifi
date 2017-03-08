@@ -89,7 +89,7 @@ TableView {
     Rectangle {
         color: "#00000000"
         anchors { fill: parent; margins: -2 }
-        radius: hifi.dimensions.borderRadius
+        //radius: hifi.dimensions.borderRadius
         border.color: isLightColorScheme ? hifi.colors.lightGrayText : hifi.colors.baseGrayHighlight
         border.width: 2
     }

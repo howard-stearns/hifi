@@ -33,11 +33,12 @@ Rectangle {
     property int actionButtonWidth: 55;
     property int actionButtonAllowance: actionButtonWidth * 2;
     property int minNameCardWidth: palContainer.width - (actionButtonAllowance * 2) - 4 - hifi.dimensions.scrollbarBackgroundWidth;
-    property int nameCardWidth: minNameCardWidth + (iAmAdmin ? 0 : actionButtonAllowance);
+    property int nameCardWidth: minNameCardWidth + (iAmAdmin ? 0 : actionButtonAllowance * 2);
     property var myData: ({displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}); // valid dummy until set
     property var ignored: ({}); // Keep a local list of ignored avatars & their data. Necessary because HashMap is slow to respond after ignoring.
     property var userModelData: []; // This simple list is essentially a mirror of the userModel listModel without all the extra complexities.
     property bool iAmAdmin: false;
+    property var activeTab: "nearbyTab";
 
     HifiConstants { id: hifi; }
 
@@ -90,8 +91,6 @@ Rectangle {
         color: pal.color;
         // Anchors
         anchors.centerIn: pal;
-        // Properties
-        radius: hifi.dimensions.borderRadius;
 
         // This contains the current user's NameCard and will contain other information in the future
         Rectangle {
@@ -103,8 +102,6 @@ Rectangle {
             color: pal.color;
             // Anchors
             anchors.top: palContainer.top;
-            // Properties
-            radius: hifi.dimensions.borderRadius;
             // This NameCard refers to the current user's NameCard (the one above the table)
             NameCard {
                 id: myCard;
@@ -120,7 +117,14 @@ Rectangle {
                 // Anchors
                 anchors.left: parent.left;
             }
-            Row {
+            Item {
+                visible: activeTab == "nearbyTab";
+                anchors {
+                    right: parent.right;
+                    rightMargin: 100;
+                    top: parent.top;
+                    topMargin: 10;
+                }
                 HifiControls.CheckBox {
                     id: filter;
                     checked: settings.filtered;
@@ -128,50 +132,230 @@ Rectangle {
                     boxSize: reload.height * 0.70;
                     onCheckedChanged: refreshWithFilter();
                 }
-                HifiControls.GlyphButton {
-                    id: reload;
-                    glyph: hifi.glyphs.reload;
-                    width: reload.height;
-                    onClicked: refreshWithFilter();
-                }
-                spacing: 50;
+            }
+        }
+    Item {
+        id: palTabContainer;
+        // Anchors
+        anchors {
+            top: myInfo.bottom;
+            bottom: parent.bottom;
+            left: parent.left;
+            right: parent.right;
+        }
+        Rectangle {
+            id: tabSelectorContainer;
+            // Anchors
+            anchors {
+                top: parent.top;
+                topMargin: 2;
+                horizontalCenter: parent.horizontalCenter;
+            }
+            width: parent.width;
+            height: 35 - anchors.topMargin;
+            Rectangle {
+                id: nearbyTabSelector;
+                // Anchors
                 anchors {
-                    right: parent.right;
                     top: parent.top;
-                    topMargin: 10;
+                    left: parent.left;
+                }
+                width: parent.width/2;
+                height: parent.height;
+                color: activeTab == "nearbyTab" ? pal.color : "#CCCCCC";
+                MouseArea {
+                    anchors.fill: parent;
+                    acceptedButtons: Qt.LeftButton;
+                    hoverEnabled: true;
+                    onClicked: activeTab = "nearbyTab";
+                }
+
+                // "NEARBY" Text Container
+                Item {
+                    id: nearbyTabSelectorTextContainer;
+                    anchors.fill: parent;
+                    // Refresh button
+                    Rectangle {
+                        visible: activeTab == "nearbyTab";
+                        anchors.verticalCenter: parent.verticalCenter;
+                        anchors.right: parent.right;
+                        anchors.rightMargin: 6;
+                        height: reload.height;
+                        width: height;
+                        HifiControls.GlyphButton {
+                            id: reload;
+                            width: reload.height;
+                            glyph: hifi.glyphs.reload;
+                            onClicked: refreshWithFilter();
+                        }
+                    }
+                    // "NEARBY" text
+                    RalewaySemiBold {
+                        id: nearbyTabSelectorText;
+                        text: "NEARBY";
+                        // Text size
+                        size: hifi.fontSizes.tabularData;
+                        // Anchors
+                        anchors.fill: parent;
+                        // Style
+                        font.capitalization: Font.AllUppercase;
+                        color: hifi.colors.redHighlight;
+                        // Alignment
+                        horizontalAlignment: Text.AlignHCenter;
+                        verticalAlignment: Text.AlignVCenter;
+                    }
+                }
+            }
+            Rectangle {
+                id: connectionsTabSelector;
+                // Anchors
+                anchors {
+                    top: parent.top;
+                    left: nearbyTabSelector.right;
+                }
+                width: parent.width/2;
+                height: parent.height;
+                color: activeTab == "connectionsTab" ? pal.color : "#CCCCCC";
+                MouseArea {
+                    anchors.fill: parent;
+                    acceptedButtons: Qt.LeftButton;
+                    hoverEnabled: true;
+                    onClicked: activeTab = "connectionsTab";
+                }
+
+                // "CONNECTIONS" Text Container
+                Item {
+                    id: connectionsTabSelectorTextContainer;
+                    anchors.fill: parent;
+                    // Refresh button
+                    Rectangle {
+                        visible: activeTab == "connectionsTab";
+                        anchors.verticalCenter: parent.verticalCenter;
+                        anchors.right: parent.right;
+                        anchors.rightMargin: 6;
+                        height: reload.height;
+                        width: height;
+                        HifiControls.GlyphButton {
+                            id: reloadConnections;
+                            width: reload.height;
+                            glyph: hifi.glyphs.reload;
+                            /*onClicked: refreshWithFilter();*/
+                        }
+                    }
+                    // "CONNECTIONS" text
+                    RalewaySemiBold {
+                        id: connectionsTabSelectorText;
+                        text: "CONNECTIONS";
+                        // Text size
+                        size: hifi.fontSizes.tabularData;
+                        // Anchors
+                        anchors.fill: parent;
+                        // Style
+                        font.capitalization: Font.AllUppercase;
+                        color: hifi.colors.redHighlight;
+                        // Alignment
+                        horizontalAlignment: Text.AlignHCenter;
+                        verticalAlignment: Text.AlignVCenter;
+                    }
                 }
             }
         }
-        // Rectangles used to cover up rounded edges on bottom of MyInfo Rectangle
-        Rectangle {
-            color: pal.color;
-            width: palContainer.width;
-            height: 10;
-            anchors.top: myInfo.bottom;
-            anchors.left: parent.left;
+        Item {
+            id: tabBorders;
+            anchors.fill: parent;
+            property var color: hifi.colors.lightGray;
+            property int borderWeight: 3;
+            // Left border
+            Rectangle {
+                color: parent.color;
+                anchors {
+                    left: parent.left;
+                    bottom: parent.bottom;
+                }
+                width: parent.borderWeight;
+                height: parent.height - (activeTab == "nearbyTab" ? 0 : tabSelectorContainer.height);
+            }
+            // Right border
+            Rectangle {
+                color: parent.color;
+                anchors {
+                    right: parent.right;
+                    bottom: parent.bottom;
+                }
+                width: parent.borderWeight;
+                height: parent.height - (activeTab == "nearbyTab" ? tabSelectorContainer.height : 0);
+            }
+            // Bottom border
+            Rectangle {
+                color: parent.color;
+                anchors {
+                    bottom: parent.bottom;
+                    left: parent.left;
+                    right: parent.right;
+                }
+                height: parent.borderWeight;
+            }
+            // Border between buttons
+            Rectangle {
+                color: parent.color;
+                anchors {
+                    horizontalCenter: parent.horizontalCenter;
+                    top: parent.top;
+                }
+                width: parent.borderWeight;
+                height: tabSelectorContainer.height + width;
+            }
+            // Border above selected tab
+            Rectangle {
+                color: parent.color;
+                anchors {
+                    top: parent.top;
+                    left: parent.left;
+                    leftMargin: activeTab == "nearbyTab" ? 0 : parent.width/2;
+                }
+                width: parent.width/2;
+                height: parent.borderWeight;
+            }
+            // Border below unselected tab
+            Rectangle {
+                color: parent.color;
+                anchors {
+                    top: parent.top;
+                    topMargin: tabSelectorContainer.height;
+                    left: parent.left;
+                    leftMargin: activeTab == "nearbyTab" ? parent.width/2 : 0;
+                }
+                width: parent.width/2;
+                height: parent.borderWeight;
+            }
         }
-        Rectangle {
-            color: pal.color;
-            width: palContainer.width;
-            height: 10;
-            anchors.bottom: table.top;
-            anchors.left: parent.left;
+    Rectangle {
+        id: nearbyTab;
+        // Anchors
+        anchors {
+            top: tabSelectorContainer.bottom;
+            topMargin: tabSelectorContainer.height;
+            bottom: parent.bottom;
+            bottomMargin: 12;
+            horizontalCenter: parent.horizontalCenter;
         }
+        width: parent.width - 12;
+        visible: activeTab == "nearbyTab"
+
         // Rectangle that houses "ADMIN" string
         Rectangle {
             id: adminTab;
             // Size
-            width: 2*actionButtonWidth + hifi.dimensions.scrollbarBackgroundWidth + 2;
+            width: actionButtonAllowance + 8;
             height: 40;
             // Anchors
-            anchors.bottom: myInfo.bottom;
-            anchors.bottomMargin: -10;
-            anchors.right: myInfo.right;
+            anchors.top: parent.top;
+            anchors.topMargin: -30;
+            anchors.right: parent.right;
             // Properties
             visible: iAmAdmin;
             // Style
             color: hifi.colors.tableRowLightEven;
-            radius: hifi.dimensions.borderRadius;
             border.color: hifi.colors.lightGrayText;
             border.width: 2;
             // "ADMIN" text
@@ -198,11 +382,10 @@ Rectangle {
         HifiControls.Table {
             id: table;
             // Size
-            height: palContainer.height - myInfo.height - 4;
-            width: palContainer.width - 4;
+            height: palContainer.height - myInfo.height - 8;
+            width: palContainer.width - 12;
             // Anchors
-            anchors.left: parent.left;
-            anchors.top: myInfo.bottom;
+            anchors.fill: parent;
             // Properties
             centerHeaderText: true;
             sortIndicatorVisible: true;
@@ -449,7 +632,7 @@ Rectangle {
             width: 20;
             height: 28;
             anchors.right: adminTab.right;
-            anchors.rightMargin: 10 + hifi.dimensions.scrollbarBackgroundWidth;
+            anchors.rightMargin: hifi.dimensions.scrollbarBackgroundWidth + 6;
             anchors.top: adminTab.top;
             anchors.topMargin: 2;
             RalewayRegular {
@@ -474,6 +657,20 @@ Rectangle {
                 onExited: adminHelpText.color = hifi.colors.redHighlight;
             }
         }
+    } // "Nearby" Tab
+    Rectangle {
+        id: connectionsTab;
+        // Anchors
+        anchors {
+            top: tabSelectorContainer.bottom;
+            topMargin: tabSelectorContainer.height;
+            bottom: parent.bottom;
+            bottomMargin: 12;
+            horizontalCenter: parent.horizontalCenter;
+        }
+        visible: activeTab == "connectionsTab"
+    } // "Connections" Tab
+    } // palTabContainer
 
         HifiControls.Keyboard {
             id: keyboard;
@@ -484,8 +681,8 @@ Rectangle {
                 left: parent.left;
                 right: parent.right;
             }
-        }
-    }
+        } // Keyboard
+    } // PAL container
 
     // Timer used when selecting table rows that aren't yet present in the model
     // (i.e. when selecting avatars using edit.js or sphere overlays)
