@@ -28,12 +28,11 @@ Rectangle {
     // Style
     color: "#E3E3E3";
     // Properties
-    property int myCardHeight: 90;
+    property int myCardHeight: 82;
     property int rowHeight: 70;
     property int actionButtonWidth: 55;
-    property int actionButtonAllowance: actionButtonWidth * 2;
-    property int minNameCardWidth: palContainer.width - (actionButtonAllowance * 2) - 4 - hifi.dimensions.scrollbarBackgroundWidth;
-    property int nameCardWidth: minNameCardWidth + (iAmAdmin ? 0 : actionButtonAllowance * 2);
+    property int myNameCardWidth: palContainer.width - 175; // Don't keep the magic number around; change it when you move the "in view" checkbox
+    property int nameCardWidth: table.width - (iAmAdmin ? (actionButtonWidth * 4) : (actionButtonWidth * 2)) - 4 - hifi.dimensions.scrollbarBackgroundWidth;
     property var myData: ({displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}); // valid dummy until set
     property var ignored: ({}); // Keep a local list of ignored avatars & their data. Necessary because HashMap is slow to respond after ignoring.
     property var userModelData: []; // This simple list is essentially a mirror of the userModel listModel without all the extra complexities.
@@ -112,13 +111,14 @@ Rectangle {
                 avgAudioLevel: myData.avgAudioLevel;
                 isMyCard: true;
                 // Size
-                width: minNameCardWidth;
+                width: myNameCardWidth;
                 height: parent.height;
                 // Anchors
                 anchors.left: parent.left;
             }
             Item {
                 visible: activeTab == "nearbyTab";
+                id: inViewCheckboxContainer;
                 anchors {
                     right: parent.right;
                     rightMargin: 100;
@@ -167,7 +167,12 @@ Rectangle {
                     anchors.fill: parent;
                     acceptedButtons: Qt.LeftButton;
                     hoverEnabled: true;
-                    onClicked: activeTab = "nearbyTab";
+                    onClicked: {
+                        if (activeTab != "nearbyTab") {
+                            refreshWithFilter();
+                        }
+                        activeTab = "nearbyTab";
+                    }
                 }
 
                 // "NEARBY" Text Container
@@ -346,7 +351,7 @@ Rectangle {
         Rectangle {
             id: adminTab;
             // Size
-            width: actionButtonAllowance + 8;
+            width: 2*actionButtonWidth + hifi.dimensions.scrollbarBackgroundWidth + 6;
             height: 40;
             // Anchors
             anchors.top: parent.top;
@@ -632,7 +637,7 @@ Rectangle {
             width: 20;
             height: 28;
             anchors.right: adminTab.right;
-            anchors.rightMargin: hifi.dimensions.scrollbarBackgroundWidth + 6;
+            anchors.rightMargin: 12 + hifi.dimensions.scrollbarBackgroundWidth;
             anchors.top: adminTab.top;
             anchors.topMargin: 2;
             RalewayRegular {
