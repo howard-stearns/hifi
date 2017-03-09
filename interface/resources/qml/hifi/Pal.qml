@@ -65,8 +65,11 @@ Rectangle {
     }
     function getSelectedSessionIDs() {
         var sessionIDs = [];
-        nearbyTable.selection.forEach(function (userIndex) {
-            sessionIDs.push(nearbyUserModelData[userIndex].sessionId);
+        table.selection.forEach(function (userIndex) {
+            var datum = nearbyUserModelData[userIndex];
+            if (datum) { // Might have been filtered out
+                sessionIDs.push(datum.sessionId);
+            }
         });
         return sessionIDs;
     }
@@ -890,10 +893,10 @@ Rectangle {
         // Received an "updateUsername()" request from the JS
         case 'updateUsername':
             // The User ID (UUID) is the first parameter in the message.
-            var userId = message.params[0];
+            var userId = message.params.sessionId;
             // The text that goes in the userName field is the second parameter in the message.
-            var userName = message.params[1];
-            var admin = message.params[2];
+            var userName = message.params.userName;
+            var admin = message.params.admin;
             // If the userId is empty, we're updating "myData".
             if (!userId) {
                 myData.userName = userName;
@@ -903,11 +906,15 @@ Rectangle {
                 var userIndex = findSessionIndex(userId);
                 if (userIndex != -1) {
                     // Set the userName appropriately
-                    nearbyUserModel.setProperty(userIndex, "userName", userName);
-                    nearbyUserModelData[userIndex].userName = userName; // Defensive programming
-                    // Set the admin status appropriately
-                    nearbyUserModel.setProperty(userIndex, "admin", admin);
-                    nearbyUserModelData[userIndex].admin = admin; // Defensive programming
+                    if (userName !== undefined) {
+                        nearbyUserModel.setProperty(userIndex, "userName", userName);
+                        nearbyUserModelData[userIndex].userName = userName; // Defensive programming
+                    }
+                    if (admin !== undefined) {
+                        // Set the admin status appropriately
+                        nearbyUserModel.setProperty(userIndex, "admin", admin);
+                        nearbyUserModelData[userIndex].admin = admin; // Defensive programming
+                    }
                 }
             }
             break;
