@@ -67,7 +67,7 @@ Item {
             id: myDisplayName
             visible: isMyCard
             // Size
-            width: parent.width + 70
+            width: parent.width
             height: 40
             // Anchors
             anchors.top: parent.top

@@ -1,6 +1,6 @@
 "use strict";
 /* jslint vars: true, plusplus: true, forin: true*/
-/* globals Tablet, Script, AvatarList, Users, Entities, MyAvatar, Camera, Overlays, Vec3, Quat, Controller, print, getControllerWorldLocation */
+/* globals Tablet, Script, AvatarList, Users, Entities, MyAvatar, Camera, Overlays, Vec3, Quat, Controller, print, getControllerWorldLocation, GlobalServices */
 /* eslint indent: ["error", 4, { "outerIIFEBody": 0 }] */
 //
 // pal.js
@@ -268,7 +268,12 @@ function fromQml(message) { // messages are {method, params}, like json-rpc. See
         break;
     case 'goToUser':
         location.goToUser(message.params);
-        print('Unrecognized message from Pal.qml:', JSON.stringify(message));
+        break;
+    case 'setVisibility':
+        GlobalServices.findableBy = message.params;
+        break;
+    case 'getVisibility':
+        findableByChanged(GlobalServices.findableBy);
         break;
     default:
         print('Unrecognized message from Pal.qml:', JSON.stringify(message));
@@ -550,6 +555,7 @@ function startup() {
     Messages.subscribe(CHANNEL);
     Messages.messageReceived.connect(receiveMessage);
     Users.avatarDisconnected.connect(avatarDisconnected);
+    GlobalServices.findableByChanged.connect(findableByChanged);
 }
 
 startup();
@@ -698,6 +704,20 @@ function avatarDisconnected(nodeID) {
     sendToQml({method: 'avatarDisconnected', params: [nodeID]});
 }
 
+function findableByChanged(usernameVisibility) {
+    // Update PAL visibility dropdown
+    // Default to "friends" if undeterminable
+    var visibility = 1;
+    if (usernameVisibility == "all") {
+        visibility = 0;
+    } else if (usernameVisibility == "friends") {
+        visibility = 1;
+    } else if (usernameVisibility == "none") {
+        visibility = 2;
+    }
+    sendToQml({ method: 'updateVisibility', params: visibility })
+}
+
 function clearLocalQMLDataAndClosePAL() {
     sendToQml({ method: 'clearLocalQMLData' });
 }
@@ -715,6 +735,7 @@ function shutdown() {
     Messages.subscribe(CHANNEL);
     Messages.messageReceived.disconnect(receiveMessage);
     Users.avatarDisconnected.disconnect(avatarDisconnected);
+    GlobalServices.findableByChanged.disconnect(findableByChanged);
     off();
 }
 

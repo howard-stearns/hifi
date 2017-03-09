@@ -31,13 +31,14 @@ Rectangle {
     property int myCardHeight: 82;
     property int rowHeight: 70;
     property int actionButtonWidth: 55;
-    property int myNameCardWidth: palContainer.width - 175; // Don't keep the magic number around; change it when you move the "in view" checkbox
+    property int myNameCardWidth: palContainer.width - upperRightInfoContainer.width;
     property int nameCardWidth: table.width - (iAmAdmin ? (actionButtonWidth * 4) : (actionButtonWidth * 2)) - 4 - hifi.dimensions.scrollbarBackgroundWidth;
     property var myData: ({displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}); // valid dummy until set
     property var ignored: ({}); // Keep a local list of ignored avatars & their data. Necessary because HashMap is slow to respond after ignoring.
     property var userModelData: []; // This simple list is essentially a mirror of the userModel listModel without all the extra complexities.
     property bool iAmAdmin: false;
     property var activeTab: "nearbyTab";
+    property int usernameVisibility;
 
     HifiConstants { id: hifi; }
 
@@ -70,9 +71,9 @@ Rectangle {
         return sessionIDs;
     }
     function refreshWithFilter() {
-        // We should just be able to set settings.filtered to filter.checked, but see #3249, so send to .js for saving.
+        // We should just be able to set settings.filtered to inViewCheckbox.checked, but see #3249, so send to .js for saving.
         var userIds = getSelectedSessionIDs();
-        var params = {filter: filter.checked && {distance: settings.nearDistance}};
+        var params = {filter: inViewCheckbox.checked && {distance: settings.nearDistance}};
         if (userIds.length > 0) {
             params.selected = [[userIds[0]], true, true];
         }
@@ -114,23 +115,36 @@ Rectangle {
                 width: myNameCardWidth;
                 height: parent.height;
                 // Anchors
+                anchors.top: parent.top
                 anchors.left: parent.left;
             }
             Item {
-                visible: activeTab == "nearbyTab";
-                id: inViewCheckboxContainer;
-                anchors {
-                    right: parent.right;
-                    rightMargin: 100;
-                    top: parent.top;
-                    topMargin: 10;
-                }
+                id: upperRightInfoContainer;
+                width: 225;
+                height: 40;
+                anchors.top: parent.top;
+                anchors.right: parent.right;
                 HifiControls.CheckBox {
-                    id: filter;
+                    id: inViewCheckbox;
+                    visible: activeTab == "nearbyTab";
+                    anchors.fill: parent;
                     checked: settings.filtered;
                     text: "in view";
                     boxSize: reload.height * 0.70;
                     onCheckedChanged: refreshWithFilter();
+                }
+                ComboBox {
+                    id: visibilityComboBox;
+                    visible: activeTab == "connectionsTab";
+                    anchors.fill: parent;
+                    currentIndex: usernameVisibility;
+                    model: ListModel {
+                        id: visibilityComboBoxListItems
+                        ListElement { text: "Online"; value: "all"; }
+                        ListElement { text: "Available to Friends Only"; value: "friends"; }
+                        ListElement { text: "Appear Offline"; value: "none" }
+                    }
+                    onCurrentIndexChanged: { pal.sendToScript({method: 'setVisibility', params: visibilityComboBoxListItems.get(currentIndex).value})}
                 }
             }
         }
@@ -225,7 +239,8 @@ Rectangle {
                     anchors.fill: parent;
                     acceptedButtons: Qt.LeftButton;
                     hoverEnabled: true;
-                    onClicked: activeTab = "connectionsTab";
+                    onClicked: { activeTab = "connectionsTab";
+                        pal.sendToScript({method: 'getVisibility'}); }
                 }
 
                 // "CONNECTIONS" Text Container
@@ -819,6 +834,10 @@ Rectangle {
         case 'avatarDisconnected':
             var sessionID = message.params[0];
             delete ignored[sessionID];
+            break;
+        case 'updateVisibility':
+            usernameVisibility = message.params;
+            console.log('FIXME:', JSON.stringify(message));
             break;
         default:
             console.log('Unrecognized message:', JSON.stringify(message));
