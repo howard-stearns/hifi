@@ -33,7 +33,7 @@ Rectangle {
     property int actionButtonWidth: 55;
     property int myNameCardWidth: palContainer.width - (activeTab == "nearbyTab" ? 70 : upperRightInfoContainer.width);
     property int nameCardWidth: nearbyTable.width - (iAmAdmin ? (actionButtonWidth * 4) : (actionButtonWidth * 2)) - 4 - hifi.dimensions.scrollbarBackgroundWidth;
-    property var myData: ({profilePicUrl: "../../icons/defaultNameCardUser.png", displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}); // valid dummy until set
+    property var myData: ({profileUrl: "../../icons/defaultNameCardUser.png", displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}); // valid dummy until set
     property var ignored: ({}); // Keep a local list of ignored avatars & their data. Necessary because HashMap is slow to respond after ignoring.
     property var nearbyUserModelData: []; // This simple list is essentially a mirror of the nearbyUserModel listModel without all the extra complexities.
     property bool iAmAdmin: false;
@@ -61,8 +61,10 @@ Rectangle {
         category: "pal";
         property bool filtered: false;
         property int nearDistance: 30;
-        property int sortIndicatorColumn: 1;
-        property int sortIndicatorOrder: Qt.AscendingOrder;
+        property int nearbySortIndicatorColumn: 1;
+        property int nearbySortIndicatorOrder: Qt.AscendingOrder;
+        property int connectionsSortIndicatorColumn: 0;
+        property int connectionsSortIndicatorOrder: Qt.AscendingOrder;
     }
     function getSelectedSessionIDs() {
         var sessionIDs = [];
@@ -360,6 +362,10 @@ Rectangle {
                 height: parent.borderWeight;
             }
         }
+        
+    /*****************************************
+                   NEARBY TAB
+    *****************************************/
     Rectangle {
         id: nearbyTab;
         // Anchors
@@ -421,14 +427,14 @@ Rectangle {
             centerHeaderText: true;
             sortIndicatorVisible: true;
             headerVisible: true;
-            sortIndicatorColumn: settings.sortIndicatorColumn;
-            sortIndicatorOrder: settings.sortIndicatorOrder;
+            sortIndicatorColumn: settings.nearbySortIndicatorColumn;
+            sortIndicatorOrder: settings.nearbySortIndicatorOrder;
             onSortIndicatorColumnChanged: {
-                settings.sortIndicatorColumn = sortIndicatorColumn;
+                settings.nearbySortIndicatorColumn = nearbySortIndicatorColumn;
                 sortModel();
             }
             onSortIndicatorOrderChanged: {
-                settings.sortIndicatorOrder = sortIndicatorOrder;
+                settings.nearbySortIndicatorOrder = nearbySortIndicatorOrder;
                 sortModel();
             }
 
@@ -652,8 +658,9 @@ Rectangle {
                 onClicked: letterbox(hifi.glyphs.question,
                                      "Display Names",
                                      "Bold names in the list are <b>avatar display names</b>.<br>" +
-                                     "If a display name isn't set, a unique <b>session display name</b> is assigned." +
-                                     "<br><br>Administrators of this domain can also see the <b>username</b> or <b>machine ID</b> associated with each avatar present.");
+                                     "Purple names are <b>connections</b>.<br>Green names are <b>friends</b>.<br>" +
+                                     "<br>If someone's display name isn't set, a unique <b>session display name</b> is assigned to them.<br>" +
+                                     "<br>Administrators of this domain can also see the <b>username</b> or <b>machine ID</b> associated with each avatar present.");
                 onEntered: helpText.color = hifi.colors.baseGrayHighlight;
                 onExited: helpText.color = hifi.colors.darkGray;
             }
@@ -691,6 +698,11 @@ Rectangle {
             }
         }
     } // "Nearby" Tab
+
+
+    /*****************************************
+                CONNECTIONS TAB
+    *****************************************/
     Rectangle {
         id: connectionsTab;
         // Anchors
@@ -716,13 +728,13 @@ Rectangle {
             sortIndicatorVisible: true;
             headerVisible: true;
             sortIndicatorColumn: settings.sortIndicatorColumn;
-            sortIndicatorOrder: settings.sortIndicatorOrder;
+            sortIndicatorOrder: settings.connectionsSortIndicatorOrder;
             onSortIndicatorColumnChanged: {
-                settings.sortIndicatorColumn = sortIndicatorColumn;
+                settings.connectionsSortIndicatorColumn = sortIndicatorColumn;
                 sortModel();
             }
             onSortIndicatorOrderChanged: {
-                settings.sortIndicatorOrder = sortIndicatorOrder;
+                settings.connectionsSortIndicatorOrder = sortIndicatorOrder;
                 sortModel();
             }
 
@@ -903,7 +915,7 @@ Rectangle {
             var admin = message.params.admin;
             var connection = message.params.connection;
             var profileUrl = message.params.profileUrl;
-            // If the userId is empty, we're probably updating "myData" (which should never happen with an "updateUsername" message).
+            // If the userId is empty, we're probably updating "myData".
             if (userId) {
                 // Get the index in nearbyUserModel and nearbyUserModelData associated with the passed UUID
                 var userIndex = findSessionIndex(userId);
@@ -929,6 +941,9 @@ Rectangle {
                         nearbyUserModelData[userIndex].profileUrl = "https://metaverse.highfidelity.com" + profileUrl; // Defensive programming
                     }
                 }
+            } else {
+                myData.profileUrl = message.params;
+                myCard.profilePicUrl = message.params; // Defensive programming
             }
             break;
         case 'updateAudioLevel':
@@ -967,7 +982,7 @@ Rectangle {
         }
     }
     function sortModel() {
-        var column = nearbyTable.getColumn(nearbyTable.sortIndicatorColumn);
+        var column = nearbyTable.getColumn(nearbyTable.nearbySortIndicatorColumn);
         var sortProperty = column ? column.role : "displayName";
         var before = (nearbyTable.sortIndicatorOrder === Qt.AscendingOrder) ? -1 : 1;
         var after = -1 * before;

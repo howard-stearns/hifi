@@ -37,6 +37,7 @@ Item {
     property bool isMyCard: false
     property bool selected: false
     property bool isAdmin: false
+    property string userTextColor: (connectionStatus == "connection" ? hifi.colors.indigoAccent : (connectionStatus == "friend" ? hifi.colors.greenHighlight : hifi.colors.darkGray))
 
     Item {
         id: avatarImage
@@ -108,6 +109,7 @@ Item {
                 // Text Positioning
                 verticalAlignment: TextInput.AlignVCenter
                 horizontalAlignment: TextInput.AlignLeft
+                autoScroll: false;
                 // Signals
                 onEditingFinished: {
                     pal.sendToScript({method: 'displayNameUpdate', params: text})
@@ -116,6 +118,7 @@ Item {
                     myDisplayName.border.width = 0
                     color = hifi.colors.darkGray
                     pal.currentlyEditingDisplayName = false
+                    autoScroll = false;
                 }
             }
             MouseArea {
@@ -128,11 +131,13 @@ Item {
                     myDisplayNameText.focus = true
                     myDisplayNameText.color = "black"
                     pal.currentlyEditingDisplayName = true
+                    myDisplayNameText.autoScroll = true;
                 }
                 onDoubleClicked: {
                     myDisplayNameText.selectAll();
                     myDisplayNameText.focus = true;
                     pal.currentlyEditingDisplayName = true
+                    myDisplayNameText.autoScroll = true;
                 }
                 onEntered: myDisplayName.color = hifi.colors.lightGrayText
                 onExited: myDisplayName.color = hifi.colors.textFieldLightBackground
@@ -188,7 +193,22 @@ Item {
                 // Text Positioning
                 verticalAlignment: Text.AlignVCenter
                 // Style
-                color: hifi.colors.darkGray
+                color: userTextColor;
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton
+                    enabled: selected
+                    hoverEnabled: true
+                    onClicked: pal.sendToScript({method: 'goToUser', params: thisNameCard.userName});
+                    onEntered: {
+                        displayNameText.color = hifi.colors.blueHighlight;
+                        userNameText.color = hifi.colors.blueHighlight;
+                    }
+                    onExited: {
+                        displayNameText.color = userTextColor;
+                        userNameText.color = userTextColor;
+                    }
+                }
             }
             TextMetrics {
                 id:     displayNameTextMetrics
@@ -261,15 +281,21 @@ Item {
             // Text Positioning
             verticalAlignment: Text.AlignVCenter
             // Style
-            color: hifi.colors.baseGray
+            color: userTextColor
             MouseArea {
                 anchors.fill: parent
                 acceptedButtons: Qt.LeftButton
                 enabled: selected
                 hoverEnabled: true
                 onClicked: pal.sendToScript({method: 'goToUser', params: thisNameCard.userName});
-                onEntered: userNameText.color = hifi.colors.blueHighlight;
-                onExited: userNameText.color = hifi.colors.baseGray;
+                    onEntered: {
+                        displayNameText.color = hifi.colors.blueHighlight;
+                        userNameText.color = hifi.colors.blueHighlight;
+                    }
+                    onExited: {
+                        displayNameText.color = userTextColor;
+                        userNameText.color = userTextColor;
+                    }
             }
         }
 

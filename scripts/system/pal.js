@@ -496,6 +496,9 @@ function populateUserList(selectData, oldAudioData) {
         } else {
             // Return our username from the Account API
             avatarPalDatum.userName = Account.username;
+            getProfilePicture(avatarPalDatum.userName, function (url) {
+                sendToQml({ method: 'updateUsername', params: url });
+            });
         }
         data.push(avatarPalDatum);
         print('PAL data:', JSON.stringify(avatarPalDatum));
