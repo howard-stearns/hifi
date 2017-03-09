@@ -14,7 +14,7 @@
 
 (function() { // BEGIN LOCAL_SCOPE
 
-var populateUserList, color, textures, removeOverlays, controllerComputePickRay, onTabletButtonClicked, onTabletScreenChanged, receiveMessage, avatarDisconnected, clearLocalQMLDataAndClosePAL, createAudioInterval, tablet, CHANNEL, getConnectionData; // forward references;
+var populateNearbyUserList, color, textures, removeOverlays, controllerComputePickRay, onTabletButtonClicked, onTabletScreenChanged, receiveMessage, avatarDisconnected, clearLocalQMLDataAndClosePAL, createAudioInterval, tablet, CHANNEL, getConnectionData; // forward references;
 
 // hardcoding these as it appears we cannot traverse the originalTextures in overlays???  Maybe I've missed
 // something, will revisit as this is sorta horrible.
@@ -257,17 +257,18 @@ function fromQml(message) { // messages are {method, params}, like json-rpc. See
         if (message.params.filter !== undefined) {
             Settings.setValue('pal/filtered', !!message.params.filter);
         }
-        populateUserList(message.params.selected, data);
+        populateNearbyUserList(message.params.selected, data);
         UserActivityLogger.palAction("refresh_nearby", "");
+        break;
+    case 'refreshConnections':
+        getConnectionData();
+        UserActivityLogger.palAction("refresh_connections", "");
         break;
     case 'displayNameUpdate':
         if (MyAvatar.displayName !== message.params) {
             MyAvatar.displayName = message.params;
             UserActivityLogger.palAction("display_name_change", "");
         }
-        break;
-    case 'connections':
-        getConnectionData();
         break;
     case 'goToUser':
         location.goToUser(message.params);
@@ -442,7 +443,7 @@ function addAvatarNode(id) {
 }
 // Each open/refresh will capture a stable set of avatarsOfInterest, within the specified filter.
 var avatarsOfInterest = {};
-function populateUserList(selectData, oldAudioData) {
+function populateNearbyUserList(selectData, oldAudioData) {
     var filter = Settings.getValue('pal/filtered') && {distance: Settings.getValue('pal/nearDistance')},
         data = [],
         avatars = AvatarList.getAvatarIdentifiers(),
@@ -577,7 +578,7 @@ function updateOverlays() {
             overlay.deleteOverlay();
         }
     });
-    // We could re-populateUserList if anything added or removed, but not for now.
+    // We could re-populateNearbyUserList if anything added or removed, but not for now.
     HighlightedEntity.updateOverlays();
 }
 function removeOverlays() {
@@ -739,7 +740,7 @@ function onTabletButtonClicked() {
         tablet.loadQMLSource("../Pal.qml");
         onPalScreen = true;
         Users.requestsDomainListData = true;
-        populateUserList();
+        populateNearbyUserList();
         isWired = true;
         Script.update.connect(updateOverlays);
         Controller.mousePressEvent.connect(handleMouseEvent);

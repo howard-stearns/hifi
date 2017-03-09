@@ -36,6 +36,7 @@ Rectangle {
     property var myData: ({profileUrl: "../../icons/defaultNameCardUser.png", displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}); // valid dummy until set
     property var ignored: ({}); // Keep a local list of ignored avatars & their data. Necessary because HashMap is slow to respond after ignoring.
     property var nearbyUserModelData: []; // This simple list is essentially a mirror of the nearbyUserModel listModel without all the extra complexities.
+    property var connectionsUserModelData: []; // This simple list is essentially a mirror of the connectionsUserModel listModel without all the extra complexities.
     property bool iAmAdmin: false;
     property var activeTab: "nearbyTab";
     property int usernameVisibility;
@@ -66,7 +67,7 @@ Rectangle {
         property int connectionsSortIndicatorColumn: 0;
         property int connectionsSortIndicatorOrder: Qt.AscendingOrder;
     }
-    function getSelectedSessionIDs() {
+    function getSelectedNearbySessionIDs() {
         var sessionIDs = [];
         nearbyTable.selection.forEach(function (userIndex) {
             var datum = nearbyUserModelData[userIndex];
@@ -76,9 +77,19 @@ Rectangle {
         });
         return sessionIDs;
     }
+    function getSelectedConnectionsUserNames() {
+        var userNames = [];
+        connectionsTable.selection.forEach(function (userIndex) {
+            var datum = connectionsUserModelData[userIndex];
+            if (datum) {
+                userNames.push(datum.userName);
+            }
+        });
+        return userNames;
+    }
     function refreshNearbyWithFilter() {
         // We should just be able to set settings.filtered to inViewCheckbox.checked, but see #3249, so send to .js for saving.
-        var userIds = getSelectedSessionIDs();
+        var userIds = getSelectedNearbySessionIDs();
         var params = {filter: inViewCheckbox.checked && {distance: settings.nearDistance}};
         if (userIds.length > 0) {
             params.selected = [[userIds[0]], true, true];
@@ -252,7 +263,8 @@ Rectangle {
                     acceptedButtons: Qt.LeftButton;
                     hoverEnabled: true;
                     onClicked: { activeTab = "connectionsTab";
-                        pal.sendToScript({method: 'getVisibility'}); }
+                        pal.sendToScript({method: 'getVisibility'});
+                        pal.sendToScript({method: 'refreshConnections'}); }
                 }
 
                 // "CONNECTIONS" Text Container
@@ -272,7 +284,7 @@ Rectangle {
                             id: reloadConnections;
                             width: reloadConnections.height;
                             glyph: hifi.glyphs.reload;
-                            /*onClicked: refreshConnectionsWithFilter();*/
+                            onClicked: pal.sendToScript({method: 'refreshConnections'});
                         }
                     }
                     // "CONNECTIONS" text
@@ -377,7 +389,7 @@ Rectangle {
             horizontalCenter: parent.horizontalCenter;
         }
         width: parent.width - 12;
-        visible: activeTab == "nearbyTab"
+        visible: activeTab == "nearbyTab";
 
         // Rectangle that houses "ADMIN" string
         Rectangle {
@@ -713,7 +725,7 @@ Rectangle {
             bottomMargin: 12;
             horizontalCenter: parent.horizontalCenter;
         }
-        visible: activeTab == "connectionsTab"
+        visible: activeTab == "connectionsTab";
 
         // This TableView refers to the Connections Table (on the "Connections" tab below the current user's NameCard)
         HifiControls.Table {
@@ -739,8 +751,8 @@ Rectangle {
             }
 
             TableViewColumn {
-                id: connectionsDisplayNameHeader;
-                role: "displayName";
+                id: connectionsUserNameHeader;
+                role: "userName";
                 title: connectionsTable.rowCount + (connectionsTable.rowCount === 1 ? " NAME" : " NAMES");
                 width: nameCardWidth;
                 movable: false;
@@ -768,9 +780,10 @@ Rectangle {
                 NameCard {
                     id: connectionsNameCard;
                     // Properties
+                    profilePicUrl: model ? model.profileUrl : "../../icons/defaultNameCardUser.png";
                     displayName: styleData.value;
                     userName: model ? model.userName : "";
-                    uuid: model ? model.sessionId : "";
+                    connectionStatus : model ? model.connection : "";
                     selected: styleData.selected;
                     // Size
                     width: nameCardWidth;
@@ -779,6 +792,10 @@ Rectangle {
                     anchors.left: parent.left;
                 }
             }
+        }
+        TextMetrics {
+            id: connectionsUserNameHeaderMetrics;
+            text: connectionsUserNameHeader.title;
         }
 
         // This Rectangle refers to the [?] popup button next to "NAMES"
@@ -789,7 +806,7 @@ Rectangle {
             anchors.left: connectionsTable.left;
             anchors.top: connectionsTable.top;
             anchors.topMargin: 1;
-            anchors.leftMargin: actionButtonWidth + nameCardWidth/2 + displayNameHeaderMetrics.width/2 + 6;
+            anchors.leftMargin: actionButtonWidth + nameCardWidth/2 + connectionsUserNameHeaderMetrics.width/2 + 6;
             RalewayRegular {
                 id: connectionsNamesHelpText;
                 text: "[?]";
@@ -844,7 +861,7 @@ Rectangle {
         }
     }
 
-    function findSessionIndex(sessionId, optionalData) { // no findIndex in .qml
+    function findNearbySessionIndex(sessionId, optionalData) { // no findIndex in .qml
         var data = optionalData || nearbyUserModelData, length = data.length;
         for (var i = 0; i < length; i++) {
             if (data[i].sessionId === sessionId) {
@@ -858,7 +875,7 @@ Rectangle {
         case 'nearbyUsers':
             var data = message.params;
             var index = -1;
-            index = findSessionIndex('', data);
+            index = findNearbySessionIndex('', data);
             if (index !== -1) {
                 iAmAdmin = Users.canKick;
                 myData = data[index];
@@ -868,7 +885,7 @@ Rectangle {
             }
             nearbyUserModelData = data;
             for (var ignoredID in ignored) {
-                index = findSessionIndex(ignoredID);
+                index = findNearbySessionIndex(ignoredID);
                 if (index === -1) { // Add back any missing ignored to the PAL, because they sometimes take a moment to show up.
                     nearbyUserModelData.push(ignored[ignoredID]);
                 } else { // Already appears in PAL; update properties of existing element in model data
@@ -877,11 +894,20 @@ Rectangle {
             }
             sortModel();
             break;
+        case 'connections':
+            console.log('GOT CONNECTIONS DATA:', JSON.stringify(message));
+            var data = message.params;
+            for (var connectionID in data) {
+                data[connectionID].profileUrl = "https://metaverse.highfidelity.com" + data[connectionID].profileUrl;
+            }
+            connectionsUserModelData = data;
+            sortConnectionsModel();
+            break;
         case 'select':
             var sessionIds = message.params[0];
             var selected = message.params[1];
             var alreadyRefreshed = message.params[2];
-            var userIndex = findSessionIndex(sessionIds[0]);
+            var userIndex = findNearbySessionIndex(sessionIds[0]);
             if (sessionIds.length > 1) {
                 letterbox("", "", 'Only one user can be selected at a time.');
             } else if (userIndex < 0) {
@@ -918,7 +944,7 @@ Rectangle {
             // If the userId is empty, we're probably updating "myData".
             if (userId) {
                 // Get the index in nearbyUserModel and nearbyUserModelData associated with the passed UUID
-                var userIndex = findSessionIndex(userId);
+                var userIndex = findNearbySessionIndex(userId);
                 if (userIndex != -1) {
                     if (userName !== undefined) {
                         // Set the userName appropriately
@@ -957,7 +983,7 @@ Rectangle {
                     myData.avgAudioLevel = avgAudioLevel;
                     myCard.avgAudioLevel = avgAudioLevel;
                 } else {
-                    var userIndex = findSessionIndex(userId);
+                    var userIndex = findNearbySessionIndex(userId);
                     if (userIndex != -1) {
                         nearbyUserModel.setProperty(userIndex, "audioLevel", audioLevel);
                         nearbyUserModelData[userIndex].audioLevel = audioLevel; // Defensive programming
@@ -987,7 +1013,7 @@ Rectangle {
         var before = (nearbyTable.sortIndicatorOrder === Qt.AscendingOrder) ? -1 : 1;
         var after = -1 * before;
         // get selection(s) before sorting
-        var selectedIDs = getSelectedSessionIDs();
+        var selectedIDs = getSelectedNearbySessionIDs();
         nearbyUserModelData.sort(function (a, b) {
             var aValue = a[sortProperty].toString().toLowerCase(), bValue = b[sortProperty].toString().toLowerCase();
             switch (true) {
@@ -1017,6 +1043,38 @@ Rectangle {
         if (newSelectedIndexes.length > 0) {
             nearbyTable.selection.select(newSelectedIndexes);
             nearbyTable.positionViewAtRow(newSelectedIndexes[0], ListView.Beginning);
+        }
+    }
+    function sortConnectionsModel() {
+        var column = connectionsTable.getColumn(connectionsTable.connectionsSortIndicatorColumn);
+        var sortProperty = column ? column.role : "userName";
+        var before = (connectionsTable.sortIndicatorOrder === Qt.AscendingOrder) ? -1 : 1;
+        var after = -1 * before;
+        // get selection(s) before sorting
+        var selectedIDs = getSelectedConnectionsUserNames();
+        connectionsUserModelData.sort(function (a, b) {
+            var aValue = a[sortProperty].toString().toLowerCase(), bValue = b[sortProperty].toString().toLowerCase();
+            switch (true) {
+            case (aValue < bValue): return before;
+            case (aValue > bValue): return after;
+            default: return 0;
+            }
+        });
+        connectionsTable.selection.clear();
+
+        connectionsUserModel.clear();
+        var userIndex = 0;
+        var newSelectedIndexes = [];
+        connectionsUserModelData.forEach(function (datum) {
+            datum.userIndex = userIndex++;
+            connectionsUserModel.append(datum);
+            if (selectedIDs.indexOf(datum.sessionId) != -1) {
+                 newSelectedIndexes.push(datum.userIndex);
+            }
+        });
+        if (newSelectedIndexes.length > 0) {
+            connectionsTable.selection.select(newSelectedIndexes);
+            connectionsTable.positionViewAtRow(newSelectedIndexes[0], ListView.Beginning);
         }
     }
     signal sendToScript(var message);
