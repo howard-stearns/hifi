@@ -1,6 +1,6 @@
 "use strict";
-/* jslint vars: true, plusplus: true, forin: true*/
-/* globals Tablet, Script, AvatarList, Users, Entities, MyAvatar, Camera, Overlays, Vec3, Quat, Controller, print, getControllerWorldLocation, GlobalServices */
+/*jslint vars:true, plusplus:true, forin:true*/
+/*global Tablet, Settings, Script, AvatarList, Users, Entities, MyAvatar, Camera, Overlays, Vec3, Quat, HMD, Controller, UserActivityLogger, Messages, Window, XMLHttpRequest, print, location, getControllerWorldLocation, GlobalServices*/
 /* eslint indent: ["error", 4, { "outerIIFEBody": 0 }] */
 //
 // pal.js
@@ -13,6 +13,8 @@
 //
 
 (function() { // BEGIN LOCAL_SCOPE
+
+var populateUserList, color, textures, removeOverlays, controllerComputePickRay, onTabletButtonClicked, onTabletScreenChanged, receiveMessage, avatarDisconnected, clearLocalQMLDataAndClosePAL, createAudioInterval, tablet, CHANNEL, getConnectionData; // forward references;
 
 // hardcoding these as it appears we cannot traverse the originalTextures in overlays???  Maybe I've missed
 // something, will revisit as this is sorta horrible.
@@ -97,9 +99,8 @@ ExtendedOverlay.prototype.hover = function (hovering) {
     if (this.key === lastHoveringId) {
         if (hovering) {
             return;
-        } else {
-            lastHoveringId = 0;
         }
+        lastHoveringId = 0;
     }
     this.editOverlay({color: color(this.selected, hovering, this.audioLevel)});
     if (this.model) {
@@ -214,9 +215,8 @@ function convertDbToLinear(decibels) {
     // but, your perception is that something 2x as loud is +10db
     // so we go from -60 to +20 or 1/64x to 4x.  For now, we can
     // maybe scale the signal this way??
-    return Math.pow(2, decibels/10.0);
+    return Math.pow(2, decibels / 10.0);
 }
-
 function fromQml(message) { // messages are {method, params}, like json-rpc. See also sendToQml.
     var data;
     switch (message.method) {
@@ -266,6 +266,9 @@ function fromQml(message) { // messages are {method, params}, like json-rpc. See
             UserActivityLogger.palAction("display_name_change", "");
         }
         break;
+    case 'connections':
+        getConnectionData();
+        break;
     case 'goToUser':
         location.goToUser(message.params);
         break;
@@ -283,6 +286,146 @@ function fromQml(message) { // messages are {method, params}, like json-rpc. See
 function sendToQml(message) {
     tablet.sendToQml(message);
 }
+function updateUser(data) {
+    print('PAL update:', JSON.stringify(data));
+    sendToQml({ method: 'updateUsername', params: data });
+}
+//
+// User management services
+//
+// These are prototype versions that will be changed when the back end changes.
+var METAVERSE_BASE = 'https://metaverse.highfidelity.com';
+
+function request(url, callback) { // cb(error, responseOfCorrectContentType) of url. General for 'get' text/html/json, but without redirects.
+    var httpRequest = new XMLHttpRequest();
+    // QT bug: apparently doesn't handle onload. Workaround using readyState.
+    httpRequest.onreadystatechange = function () {
+        var READY_STATE_DONE = 4;
+        var HTTP_OK = 200;
+        if (httpRequest.readyState >= READY_STATE_DONE) {
+            var error = (httpRequest.status !== HTTP_OK) && httpRequest.status.toString() + ':' + httpRequest.statusText,
+                response = !error && httpRequest.responseText,
+                contentType = !error && httpRequest.getResponseHeader('content-type');
+            if (!error && contentType.indexOf('application/json') === 0) {
+                try {
+                    response = JSON.parse(response);
+                } catch (e) {
+                    error = e;
+                }
+            }
+            callback(error, response);
+        }
+    };
+    httpRequest.open("GET", url, true);
+    httpRequest.send();
+}
+function requestJSON(url, callback) { // callback(data) if successfull. Logs otherwise.
+    request(url, function (error, response) {
+        if (error || (response.status !== 'success')) {
+            print("Error: unable to get", url,  error || response.status);
+            return;
+        }
+        callback(response.data);
+    });
+}
+function getProfilePicture(username, callback) { // callback(url) if successfull. (Logs otherwise)
+    // FIXME Prototype scrapes profile picture. We should include in user status, and also make available somewhere for myself
+    request(METAVERSE_BASE + '/users/' + username, function (error, html) {
+        var matched = !error && html.match(/img class="users-img" src="([^"]*)"/);
+        if (!matched) {
+            print('Error: Unable to get profile picture for', username, error);
+            return;
+        }
+        callback(matched[1]);
+    });
+}
+function getAvailableConnections(domain, callback) { // callback([{usename, location}...]) if successfull. (Logs otherwise)
+    // The back end doesn't do user connections yet. Fake it by getting all users that have made themselves accessible to us,
+    // and pretending that they are all connections.
+    function getData(cb) {
+        requestJSON(METAVERSE_BASE + '/api/v1/users?status=online', function (connectionsData) {
+
+            // The above does not include friend status. Fetch that separately.
+            requestJSON(METAVERSE_BASE + '/api/v1/user/friends', function (friendsData) {
+                var users = connectionsData.users || [], friends = friendsData.friends || [];
+                users.forEach(function (user) {
+                    user.connection = (friends.indexOf(user.username) < 0) ? 'connection' : 'friend';
+                });
+
+                // The back end doesn't include the profile picture data, but we can add that here.
+                // For our current purposes, there's no need to be fancy and try to reduce latency by doing some number of requests in parallel,
+                // so these requests are all sequential.
+                function addPicture(index) {
+                    if (index >= users.length) {
+                        return cb(users);
+                    }
+                    var user = users[index];
+                    getProfilePicture(user.username, function (url) {
+                        user.profileUrl = url;
+                        addPicture(index + 1);
+                    });
+                }
+                addPicture(0);
+            });
+        });
+    }
+
+    if (domain) {
+        // The back end doesn't keep sessionUUID in the location data yet. Fake it by finding the avatar closest to the path.
+        var positions = {};
+        AvatarList.getAvatarIdentifiers().forEach(function (id) {
+            positions[id || ''] = AvatarList.getAvatar(id).position; // Don't use null id as a key. Properties must be a string, and we don't want 'null'.
+        });
+        getData(function (users) {
+            // The endpoint in getData doesn't take a domain filter. So filter out the unwanted stuff now.
+            domain = domain.slice(1, -1); // without curly braces
+            users = users.filter(function (user) { var root = user.location.domain || user.location.root.domain; return root.id === domain; });
+
+            // Now fill in the sessionUUID as if it were in the data all along.
+            users.forEach(function (user) {
+                var coordinates = user.location.path.match(/\/([^,]+)\,([^,]+),([^\/]+)\//);
+                if (coordinates) {
+                    var position = {x: Number(coordinates[1]), y: Number(coordinates[2]), z: Number(coordinates[3])};
+                    var none = 'not found', closestId = none, bestDistance = Infinity, distance, id;
+                    for (id in positions) {
+                        distance = Vec3.distance(position, positions[id]);
+                        if (distance < bestDistance) {
+                            closestId = id;
+                            bestDistance = distance;
+                        }
+                    }
+                    if (closestId !== none) {
+                        user.location.sessionUUID = closestId;
+                    }
+                }
+            });
+
+            callback(users);
+        });
+    } else { // We don't need to filter, nor add any sessionUUID data
+        getData(callback);
+    }
+}
+
+function getConnectionData(domain) { // Update all the usernames that I am entitled to see, using my login but not dependent on canKick.
+    function frob(user) { // get into the right format
+        return {
+            sessionId: user.location.sessionUUID || '',
+            userName: user.username,
+            connection: user.connection,
+            profileUrl: user.profileUrl
+        };
+    }
+    getAvailableConnections(domain, function (users) {
+        if (domain) {
+            users.forEach(function (user) {
+                updateUser(frob(user));
+            });
+        } else {
+            sendToQml({ method: 'connections', params: users.map(frob) });
+        }
+    });
+}
 
 //
 // Main operations.
@@ -294,15 +437,16 @@ function addAvatarNode(id) {
         solid: true,
         alpha: 0.8,
         color: color(selected, false, 0.0),
-        ignoreRayIntersection: false}, selected, !conserveResources);
+        ignoreRayIntersection: false
+    }, selected, !conserveResources);
 }
 // Each open/refresh will capture a stable set of avatarsOfInterest, within the specified filter.
 var avatarsOfInterest = {};
 function populateUserList(selectData, oldAudioData) {
-    var filter = Settings.getValue('pal/filtered') && {distance: Settings.getValue('pal/nearDistance')};
-    var data = [], avatars = AvatarList.getAvatarIdentifiers();
-    avatarsOfInterest = {};
-    var myPosition = filter && Camera.position,
+    var filter = Settings.getValue('pal/filtered') && {distance: Settings.getValue('pal/nearDistance')},
+        data = [],
+        avatars = AvatarList.getAvatarIdentifiers(),
+        myPosition = filter && Camera.position,
         frustum = filter && Camera.frustum,
         verticalHalfAngle = filter && (frustum.fieldOfView / 2),
         horizontalHalfAngle = filter && (verticalHalfAngle * frustum.aspectRatio),
@@ -310,6 +454,7 @@ function populateUserList(selectData, oldAudioData) {
         front = filter && Quat.getFront(orientation),
         verticalAngleNormal = filter && Quat.getRight(orientation),
         horizontalAngleNormal = filter && Quat.getUp(orientation);
+    avatarsOfInterest = {};
     avatars.forEach(function (id) { // sorting the identifiers is just an aid for debugging
         var avatar = AvatarList.getAvatar(id);
         var name = avatar.sessionDisplayName;
@@ -353,6 +498,7 @@ function populateUserList(selectData, oldAudioData) {
         data.push(avatarPalDatum);
         print('PAL data:', JSON.stringify(avatarPalDatum));
     });
+    getConnectionData(location.domainId); // Even admins don't get relationship data in requestUsernameFromID (which is still needed for admin status, which comes from domain).
     conserveResources = Object.keys(avatarsOfInterest).length > 20;
     sendToQml({ method: 'nearbyUsers', params: data });
     if (selectData) {
@@ -363,15 +509,15 @@ function populateUserList(selectData, oldAudioData) {
 
 // The function that handles the reply from the server
 function usernameFromIDReply(id, username, machineFingerprint, isAdmin) {
-    var data = [
-        (MyAvatar.sessionUUID === id) ? '' : id, // Pal.qml recognizes empty id specially.
+    var data = {
+        sessionId: (MyAvatar.sessionUUID === id) ? '' : id, // Pal.qml recognizes empty id specially.
         // If we get username (e.g., if in future we receive it when we're friends), use it.
         // Otherwise, use valid machineFingerprint (which is not valid when not an admin).
-        username || (Users.canKick && machineFingerprint) || '',
-        isAdmin
-    ];
+        userName: username || (Users.canKick && machineFingerprint) || '',
+        admin: isAdmin
+    };
     // Ship the data off to QML
-    sendToQml({ method: 'updateUsername', params: data });
+    updateUser(data);
 }
 
 var pingPong = true;
@@ -393,15 +539,11 @@ function updateOverlays() {
         var target = avatar.position;
         var distance = Vec3.distance(target, eye);
         var offset = 0.2;
-
-        // base offset on 1/2 distance from hips to head if we can
-        var headIndex = avatar.getJointIndex("Head");
+        var diff = Vec3.subtract(target, eye); // get diff between target and eye (a vector pointing to the eye from avatar position)
+        var headIndex = avatar.getJointIndex("Head"); // base offset on 1/2 distance from hips to head if we can
         if (headIndex > 0) {
             offset = avatar.getAbsoluteJointTranslationInObjectFrame(headIndex).y / 2;
         }
-
-        // get diff between target and eye (a vector pointing to the eye from avatar position)
-        var diff = Vec3.subtract(target, eye);
 
         // move a bit in front, towards the camera
         target = Vec3.subtract(target, Vec3.multiply(Vec3.normalize(diff), offset));
@@ -620,8 +762,7 @@ function onTabletScreenChanged(type, url) {
 //
 var CHANNEL = 'com.highfidelity.pal';
 function receiveMessage(channel, messageString, senderID) {
-    if ((channel !== CHANNEL) ||
-        (senderID !== MyAvatar.sessionUUID)) {
+    if ((channel !== CHANNEL) || (senderID !== MyAvatar.sessionUUID)) {
         return;
     }
     var message = JSON.parse(messageString);
@@ -646,7 +787,7 @@ function scaleAudio(val) {
     if (val <= LOUDNESS_FLOOR) {
         audioLevel = val / LOUDNESS_FLOOR * LOUDNESS_SCALE;
     } else {
-        audioLevel = (val -(LOUDNESS_FLOOR -1 )) * LOUDNESS_SCALE;
+        audioLevel = (val - (LOUDNESS_FLOOR - 1)) * LOUDNESS_SCALE;
     }
     if (audioLevel > 1.0) {
         audioLevel = 1;
@@ -672,14 +813,14 @@ function getAudioLevel(id) {
         audioLevel = scaleAudio(Math.log(data.accumulatedLevel + 1) / LOG2);
 
         // decay avgAudioLevel
-        avgAudioLevel = Math.max((1-AUDIO_PEAK_DECAY) * (data.avgAudioLevel || 0), audioLevel);
+        avgAudioLevel = Math.max((1 - AUDIO_PEAK_DECAY) * (data.avgAudioLevel || 0), audioLevel);
 
         data.avgAudioLevel = avgAudioLevel;
         data.audioLevel = audioLevel;
 
         // now scale for the gain.  Also, asked to boost the low end, so one simple way is
         // to take sqrt of the value.  Lets try that, see how it feels.
-        avgAudioLevel = Math.min(1.0, Math.sqrt(avgAudioLevel *(sessionGains[id] || 0.75)));
+        avgAudioLevel = Math.min(1.0, Math.sqrt(avgAudioLevel * (sessionGains[id] || 0.75)));
     }
     return [audioLevel, avgAudioLevel];
 }
@@ -690,9 +831,8 @@ function createAudioInterval(interval) {
     return Script.setInterval(function () {
         var param = {};
         AvatarList.getAvatarIdentifiers().forEach(function (id) {
-            var level = getAudioLevel(id);
-            // qml didn't like an object with null/empty string for a key, so...
-            var userId = id || 0;
+            var level = getAudioLevel(id),
+                userId = id || 0; // qml didn't like an object with null/empty string for a key, so...
             param[userId] = level;
         });
         sendToQml({method: 'updateAudioLevel', params: param});
