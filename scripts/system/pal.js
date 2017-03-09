@@ -247,7 +247,7 @@ function fromQml(message) { // messages are {method, params}, like json-rpc. See
             });
         }
         break;
-    case 'refresh':
+    case 'refreshNearby':
         data = {};
         ExtendedOverlay.some(function (overlay) { // capture the audio data
             data[overlay.key] = overlay;
@@ -258,7 +258,7 @@ function fromQml(message) { // messages are {method, params}, like json-rpc. See
             Settings.setValue('pal/filtered', !!message.params.filter);
         }
         populateUserList(message.params.selected, data);
-        UserActivityLogger.palAction("refresh", "");
+        UserActivityLogger.palAction("refresh_nearby", "");
         break;
     case 'displayNameUpdate':
         if (MyAvatar.displayName !== message.params) {
@@ -354,7 +354,7 @@ function populateUserList(selectData, oldAudioData) {
         print('PAL data:', JSON.stringify(avatarPalDatum));
     });
     conserveResources = Object.keys(avatarsOfInterest).length > 20;
-    sendToQml({ method: 'users', params: data });
+    sendToQml({ method: 'nearbyUsers', params: data });
     if (selectData) {
         selectData[2] = true;
         sendToQml({ method: 'select', params: selectData });

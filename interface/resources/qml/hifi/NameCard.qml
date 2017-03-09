@@ -40,7 +40,7 @@ Item {
     Item {
         id: avatarImage
         // Size
-        height: isMyCard ? myDisplayName.height : 35
+        height: isMyCard ? (pal.activeTab == "nearbyTab" ? 70 : myDisplayName.height) : 35
         width: height
         anchors.left: parent.left
         anchors.leftMargin: -10
