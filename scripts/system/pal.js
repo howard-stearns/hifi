@@ -455,7 +455,7 @@ function populateUserList(selectData, oldAudioData) {
         verticalAngleNormal = filter && Quat.getRight(orientation),
         horizontalAngleNormal = filter && Quat.getUp(orientation);
     avatarsOfInterest = {};
-    avatars.forEach(function (id) { // sorting the identifiers is just an aid for debugging
+    avatars.forEach(function (id) {
         var avatar = AvatarList.getAvatar(id);
         var name = avatar.sessionDisplayName;
         if (!name) {
@@ -477,8 +477,10 @@ function populateUserList(selectData, oldAudioData) {
         }
         var oldAudio = oldAudioData && oldAudioData[id];
         var avatarPalDatum = {
+            profileUrl: '',
             displayName: name,
             userName: '',
+            connection: '',
             sessionId: id || '',
             audioLevel: (oldAudio && oldAudio.audioLevel) || 0.0,
             avgAudioLevel: (oldAudio && oldAudio.avgAudioLevel) || 0.0,

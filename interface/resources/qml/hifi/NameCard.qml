@@ -25,6 +25,8 @@ Item {
     }
 
     // Properties
+    property string profilePicUrl: "../../icons/defaultNameCardUser.png"
+    property string connectionStatus : ""
     property string uuid: ""
     property string displayName: ""
     property string userName: ""
@@ -35,7 +37,6 @@ Item {
     property bool isMyCard: false
     property bool selected: false
     property bool isAdmin: false
-    property bool currentlyEditingDisplayName: false
 
     Item {
         id: avatarImage
@@ -47,9 +48,15 @@ Item {
         anchors.verticalCenter: isMyCard ? undefined : parent.verticalCenter
         Image {
             id: userImage
-            source: "../../icons/defaultNameCardUser.png"
+            source: profilePicUrl
+            mipmap: true;
             // Anchors
             anchors.fill: parent
+        }
+        AnimatedImage {
+            source: "../../icons/profilePicLoading.gif"
+            anchors.fill: parent;
+            visible: userImage.status != Image.Ready;
         }
     }
     Item {
@@ -108,7 +115,7 @@ Item {
                     focus = false
                     myDisplayName.border.width = 0
                     color = hifi.colors.darkGray
-                    currentlyEditingDisplayName = false
+                    pal.currentlyEditingDisplayName = false
                 }
             }
             MouseArea {
@@ -120,12 +127,12 @@ Item {
                     myDisplayNameText.focus ? myDisplayNameText.cursorPosition = myDisplayNameText.positionAt(mouseX, mouseY, TextInput.CursorOnCharacter) : myDisplayNameText.selectAll();
                     myDisplayNameText.focus = true
                     myDisplayNameText.color = "black"
-                    currentlyEditingDisplayName = true
+                    pal.currentlyEditingDisplayName = true
                 }
                 onDoubleClicked: {
                     myDisplayNameText.selectAll();
                     myDisplayNameText.focus = true;
-                    currentlyEditingDisplayName = true
+                    pal.currentlyEditingDisplayName = true
                 }
                 onEntered: myDisplayName.color = hifi.colors.lightGrayText
                 onExited: myDisplayName.color = hifi.colors.textFieldLightBackground
