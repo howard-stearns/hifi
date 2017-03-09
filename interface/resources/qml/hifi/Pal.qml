@@ -32,10 +32,10 @@ Rectangle {
     property int rowHeight: 70;
     property int actionButtonWidth: 55;
     property int myNameCardWidth: palContainer.width - (activeTab == "nearbyTab" ? 70 : upperRightInfoContainer.width);
-    property int nameCardWidth: table.width - (iAmAdmin ? (actionButtonWidth * 4) : (actionButtonWidth * 2)) - 4 - hifi.dimensions.scrollbarBackgroundWidth;
+    property int nameCardWidth: nearbyTable.width - (iAmAdmin ? (actionButtonWidth * 4) : (actionButtonWidth * 2)) - 4 - hifi.dimensions.scrollbarBackgroundWidth;
     property var myData: ({displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}); // valid dummy until set
     property var ignored: ({}); // Keep a local list of ignored avatars & their data. Necessary because HashMap is slow to respond after ignoring.
-    property var userModelData: []; // This simple list is essentially a mirror of the userModel listModel without all the extra complexities.
+    property var nearbyUserModelData: []; // This simple list is essentially a mirror of the nearbyUserModel listModel without all the extra complexities.
     property bool iAmAdmin: false;
     property var activeTab: "nearbyTab";
     property int usernameVisibility;
@@ -65,19 +65,19 @@ Rectangle {
     }
     function getSelectedSessionIDs() {
         var sessionIDs = [];
-        table.selection.forEach(function (userIndex) {
-            sessionIDs.push(userModelData[userIndex].sessionId);
+        nearbyTable.selection.forEach(function (userIndex) {
+            sessionIDs.push(nearbyUserModelData[userIndex].sessionId);
         });
         return sessionIDs;
     }
-    function refreshWithFilter() {
+    function refreshNearbyWithFilter() {
         // We should just be able to set settings.filtered to inViewCheckbox.checked, but see #3249, so send to .js for saving.
         var userIds = getSelectedSessionIDs();
         var params = {filter: inViewCheckbox.checked && {distance: settings.nearDistance}};
         if (userIds.length > 0) {
             params.selected = [[userIds[0]], true, true];
         }
-        pal.sendToScript({method: 'refresh', params: params});
+        pal.sendToScript({method: 'refreshNearby', params: params});
     }
 
     // This is the container for the PAL
@@ -102,7 +102,7 @@ Rectangle {
             color: pal.color;
             // Anchors
             anchors.top: palContainer.top;
-            // This NameCard refers to the current user's NameCard (the one above the table)
+            // This NameCard refers to the current user's NameCard (the one above the nearbyTable)
             NameCard {
                 id: myCard;
                 // Properties
@@ -131,8 +131,8 @@ Rectangle {
                     currentIndex: usernameVisibility;
                     model: ListModel {
                         id: visibilityComboBoxListItems
-                        ListElement { text: "Online"; value: "all"; }
-                        ListElement { text: "Available to Friends Only"; value: "friends"; }
+                        ListElement { text: "Visible to Everyone"; value: "all"; }
+                        ListElement { text: "Visible to Friends Only"; value: "friends"; }
                         ListElement { text: "Appear Offline"; value: "none" }
                     }
                     onCurrentIndexChanged: { pal.sendToScript({method: 'setVisibility', params: visibilityComboBoxListItems.get(currentIndex).value})}
@@ -174,7 +174,7 @@ Rectangle {
                     hoverEnabled: true;
                     onClicked: {
                         if (activeTab != "nearbyTab") {
-                            refreshWithFilter();
+                            refreshNearbyWithFilter();
                         }
                         activeTab = "nearbyTab";
                     }
@@ -210,7 +210,7 @@ Rectangle {
                         checked: settings.filtered;
                         text: "in view";
                         boxSize: 24;
-                        onCheckedChanged: refreshWithFilter();
+                        onCheckedChanged: refreshNearbyWithFilter();
                     }
                     // Refresh button
                     Rectangle {
@@ -225,7 +225,7 @@ Rectangle {
                             id: reloadNearby;
                             width: reloadNearby.height;
                             glyph: hifi.glyphs.reload;
-                            onClicked: refreshWithFilter();
+                            onClicked: refreshNearbyWithFilter();
                         }
                     }
                 }
@@ -265,7 +265,7 @@ Rectangle {
                             id: reloadConnections;
                             width: reloadConnections.height;
                             glyph: hifi.glyphs.reload;
-                            /*onClicked: refreshWithFilter();*/
+                            /*onClicked: refreshConnectionsWithFilter();*/
                         }
                     }
                     // "CONNECTIONS" text
@@ -404,9 +404,9 @@ Rectangle {
                 verticalAlignment: Text.AlignTop;
             }
         }
-        // This TableView refers to the table (below the current user's NameCard)
+        // This TableView refers to the Nearby Table (on the "Nearby" tab below the current user's NameCard)
         HifiControls.Table {
-            id: table;
+            id: nearbyTable;
             // Size
             height: palContainer.height - myInfo.height - 8;
             width: palContainer.width - 12;
@@ -438,7 +438,7 @@ Rectangle {
             TableViewColumn {
                 id: displayNameHeader;
                 role: "displayName";
-                title: table.rowCount + (table.rowCount === 1 ? " NAME" : " NAMES");
+                title: nearbyTable.rowCount + (nearbyTable.rowCount === 1 ? " NAME" : " NAMES");
                 width: nameCardWidth;
                 movable: false;
                 resizable: false;
@@ -467,10 +467,10 @@ Rectangle {
                 resizable: false;
             }
             model: ListModel {
-                id: userModel;
+                id: nearbyUserModel;
             }
 
-            // This Rectangle refers to each Row in the table.
+            // This Rectangle refers to each Row in the nearbyTable.
             rowDelegate: Rectangle { // The only way I know to specify a row height.
                 // Size
                 height: styleData.selected ? rowHeight : rowHeight - 15;
@@ -525,8 +525,8 @@ Rectangle {
                         // cannot change mute status when ignoring
                         if (!model["ignore"]) {
                             var newValue = !model["personalMute"];
-                            userModel.setProperty(model.userIndex, "personalMute", newValue);
-                            userModelData[model.userIndex]["personalMute"] = newValue; // Defensive programming
+                            nearbyUserModel.setProperty(model.userIndex, "personalMute", newValue);s
+                            nearbyUserModelData[model.userIndex]["personalMute"] = newValue; // Defensive programming
                             Users["personalMute"](model.sessionId, newValue);
                             UserActivityLogger["palAction"](newValue ? "personalMute" : "un-personalMute", model.sessionId);
                         }
@@ -549,15 +549,15 @@ Rectangle {
                     boxSize: 24;
                     onClicked: {
                         var newValue = !model[styleData.role];
-                        userModel.setProperty(model.userIndex, styleData.role, newValue);
-                        userModelData[model.userIndex][styleData.role] = newValue; // Defensive programming
+                        nearbyUserModel.setProperty(model.userIndex, styleData.role, newValue);
+                        nearbyUserModelData[model.userIndex][styleData.role] = newValue; // Defensive programming
                         Users[styleData.role](model.sessionId, newValue);
                         UserActivityLogger["palAction"](newValue ? styleData.role : "un-" + styleData.role, model.sessionId);
                         if (styleData.role === "ignore") {
-                            userModel.setProperty(model.userIndex, "personalMute", newValue);
-                            userModelData[model.userIndex]["personalMute"] = newValue; // Defensive programming
+                            nearbyUserModel.setProperty(model.userIndex, "personalMute", newValue);
+                            nearbyUserModelData[model.userIndex]["personalMute"] = newValue; // Defensive programming
                             if (newValue) {
-                                ignored[model.sessionId] = userModelData[model.userIndex];
+                                ignored[model.sessionId] = nearbyUserModelData[model.userIndex];
                             } else {
                                 delete ignored[model.sessionId];
                             }
@@ -582,8 +582,8 @@ Rectangle {
                         Users[styleData.role](model.sessionId);
                         UserActivityLogger["palAction"](styleData.role, model.sessionId);
                         if (styleData.role === "kick") {
-                            userModelData.splice(model.userIndex, 1);
-                            userModel.remove(model.userIndex); // after changing userModelData, b/c ListModel can frob the data
+                            nearbyUserModelData.splice(model.userIndex, 1);
+                            nearbyUserModel.remove(model.userIndex); // after changing nearbyUserModelData, b/c ListModel can frob the data
                         }
                     }
                     // muted/error glyphs
@@ -606,10 +606,10 @@ Rectangle {
         Rectangle {
             // Size
             width: 2;
-            height: table.height;
+            height: nearbyTable.height;
             // Anchors
             anchors.left: adminTab.left;
-            anchors.top: table.top;
+            anchors.top: nearbyTable.top;
             // Properties
             visible: iAmAdmin;
             color: hifi.colors.lightGrayText;
@@ -624,8 +624,8 @@ Rectangle {
             color: hifi.colors.tableBackgroundLight;
             width: 20;
             height: hifi.dimensions.tableHeaderHeight - 2;
-            anchors.left: table.left;
-            anchors.top: table.top;
+            anchors.left: nearbyTable.left;
+            anchors.top: nearbyTable.top;
             anchors.topMargin: 1;
             anchors.leftMargin: actionButtonWidth + nameCardWidth/2 + displayNameHeaderMetrics.width/2 + 6;
             RalewayRegular {
@@ -695,6 +695,104 @@ Rectangle {
             horizontalCenter: parent.horizontalCenter;
         }
         visible: activeTab == "connectionsTab"
+
+        // This TableView refers to the Connections Table (on the "Connections" tab below the current user's NameCard)
+        HifiControls.Table {
+            id: connectionsTable;
+            // Size
+            height: palContainer.height - myInfo.height - 8;
+            width: palContainer.width - 12;
+            // Anchors
+            anchors.fill: parent;
+            // Properties
+            centerHeaderText: true;
+            sortIndicatorVisible: true;
+            headerVisible: true;
+            sortIndicatorColumn: settings.sortIndicatorColumn;
+            sortIndicatorOrder: settings.sortIndicatorOrder;
+            onSortIndicatorColumnChanged: {
+                settings.sortIndicatorColumn = sortIndicatorColumn;
+                sortModel();
+            }
+            onSortIndicatorOrderChanged: {
+                settings.sortIndicatorOrder = sortIndicatorOrder;
+                sortModel();
+            }
+
+            TableViewColumn {
+                id: connectionsDisplayNameHeader;
+                role: "displayName";
+                title: connectionsTable.rowCount + (connectionsTable.rowCount === 1 ? " NAME" : " NAMES");
+                width: nameCardWidth;
+                movable: false;
+                resizable: false;
+            }
+            model: ListModel {
+                id: connectionsUserModel;
+            }
+
+            // This Rectangle refers to each Row in the connectionsTable.
+            rowDelegate: Rectangle {
+                // Size
+                height: styleData.selected ? rowHeight : rowHeight - 15;
+                color: styleData.selected
+                    ? hifi.colors.orangeHighlight
+                    : styleData.alternate ? hifi.colors.tableRowLightEven : hifi.colors.tableRowLightOdd;
+            }
+
+            // This Item refers to the contents of each Cell
+            itemDelegate: Item {
+                id: connectionsItemCell;
+
+                // This NameCard refers to the cell that contains an avatar's
+                // DisplayName and UserName
+                NameCard {
+                    id: connectionsNameCard;
+                    // Properties
+                    displayName: styleData.value;
+                    userName: model ? model.userName : "";
+                    uuid: model ? model.sessionId : "";
+                    selected: styleData.selected;
+                    // Size
+                    width: nameCardWidth;
+                    height: parent.height;
+                    // Anchors
+                    anchors.left: parent.left;
+                }
+            }
+        }
+
+        // This Rectangle refers to the [?] popup button next to "NAMES"
+        Rectangle {
+            color: hifi.colors.tableBackgroundLight;
+            width: 20;
+            height: hifi.dimensions.tableHeaderHeight - 2;
+            anchors.left: connectionsTable.left;
+            anchors.top: connectionsTable.top;
+            anchors.topMargin: 1;
+            anchors.leftMargin: actionButtonWidth + nameCardWidth/2 + displayNameHeaderMetrics.width/2 + 6;
+            RalewayRegular {
+                id: connectionsNamesHelpText;
+                text: "[?]";
+                size: hifi.fontSizes.tableHeading + 2;
+                font.capitalization: Font.AllUppercase;
+                color: hifi.colors.darkGray;
+                horizontalAlignment: Text.AlignHCenter;
+                verticalAlignment: Text.AlignVCenter;
+                anchors.fill: parent;
+            }
+            MouseArea {
+                anchors.fill: parent;
+                acceptedButtons: Qt.LeftButton;
+                hoverEnabled: true;
+                onClicked: letterbox(hifi.glyphs.question,
+                                     "CONNECTION NAMES",
+                                     "This is <b>temporary text</b>.<br>" +
+                                     "It will <b>be replaced</b> eventually.");
+                onEntered: connectionsNamesHelpText.color = hifi.colors.baseGrayHighlight;
+                onExited: connectionsNamesHelpText.color = hifi.colors.darkGray;
+            }
+        }
     } // "Connections" Tab
     } // palTabContainer
 
@@ -710,7 +808,7 @@ Rectangle {
         } // Keyboard
     } // PAL container
 
-    // Timer used when selecting table rows that aren't yet present in the model
+    // Timer used when selecting nearbyTable rows that aren't yet present in the model
     // (i.e. when selecting avatars using edit.js or sphere overlays)
     Timer {
         property bool selected; // Selected or deselected?
@@ -718,17 +816,17 @@ Rectangle {
         id: selectionTimer;
         onTriggered: {
             if (selected) {
-                table.selection.clear(); // for now, no multi-select
-                table.selection.select(userIndex);
-                table.positionViewAtRow(userIndex, ListView.Beginning);
+                nearbyTable.selection.clear(); // for now, no multi-select
+                nearbyTable.selection.select(userIndex);
+                nearbyTable.positionViewAtRow(userIndex, ListView.Beginning);
             } else {
-                table.selection.deselect(userIndex);
+                nearbyTable.selection.deselect(userIndex);
             }
         }
     }
 
     function findSessionIndex(sessionId, optionalData) { // no findIndex in .qml
-        var data = optionalData || userModelData, length = data.length;
+        var data = optionalData || nearbyUserModelData, length = data.length;
         for (var i = 0; i < length; i++) {
             if (data[i].sessionId === sessionId) {
                 return i;
@@ -738,7 +836,7 @@ Rectangle {
     }
     function fromScript(message) {
         switch (message.method) {
-        case 'users':
+        case 'nearbyUsers':
             var data = message.params;
             var index = -1;
             index = findSessionIndex('', data);
@@ -749,13 +847,13 @@ Rectangle {
             } else {
                 console.log("This user's data was not found in the user list. PAL will not function properly.");
             }
-            userModelData = data;
+            nearbyUserModelData = data;
             for (var ignoredID in ignored) {
                 index = findSessionIndex(ignoredID);
                 if (index === -1) { // Add back any missing ignored to the PAL, because they sometimes take a moment to show up.
-                    userModelData.push(ignored[ignoredID]);
+                    nearbyUserModelData.push(ignored[ignoredID]);
                 } else { // Already appears in PAL; update properties of existing element in model data
-                    userModelData[index] = ignored[ignoredID];
+                    nearbyUserModelData[index] = ignored[ignoredID];
                 }
             }
             sortModel();
@@ -777,11 +875,11 @@ Rectangle {
             } else {
                 // If we've already refreshed the PAL and found the avatar in the model
                 if (alreadyRefreshed === true) {
-                    // Wait a little bit before trying to actually select the avatar in the table
+                    // Wait a little bit before trying to actually select the avatar in the nearbyTable
                     selectionTimer.interval = 250;
                 } else {
                     // If we've found the avatar in the model and didn't need to refresh,
-                    // select the avatar in the table immediately
+                    // select the avatar in the nearbyTable immediately
                     selectionTimer.interval = 0;
                 }
                 selectionTimer.selected = selected;
@@ -801,15 +899,15 @@ Rectangle {
                 myData.userName = userName;
                 myCard.userName = userName; // Defensive programming
             } else {
-                // Get the index in userModel and userModelData associated with the passed UUID
+                // Get the index in nearbyUserModel and nearbyUserModelData associated with the passed UUID
                 var userIndex = findSessionIndex(userId);
                 if (userIndex != -1) {
                     // Set the userName appropriately
-                    userModel.setProperty(userIndex, "userName", userName);
-                    userModelData[userIndex].userName = userName; // Defensive programming
+                    nearbyUserModel.setProperty(userIndex, "userName", userName);
+                    nearbyUserModelData[userIndex].userName = userName; // Defensive programming
                     // Set the admin status appropriately
-                    userModel.setProperty(userIndex, "admin", admin);
-                    userModelData[userIndex].admin = admin; // Defensive programming
+                    nearbyUserModel.setProperty(userIndex, "admin", admin);
+                    nearbyUserModelData[userIndex].admin = admin; // Defensive programming
                 }
             }
             break;
@@ -826,10 +924,10 @@ Rectangle {
                 } else {
                     var userIndex = findSessionIndex(userId);
                     if (userIndex != -1) {
-                        userModel.setProperty(userIndex, "audioLevel", audioLevel);
-                        userModelData[userIndex].audioLevel = audioLevel; // Defensive programming
-                        userModel.setProperty(userIndex, "avgAudioLevel", avgAudioLevel);
-                        userModelData[userIndex].avgAudioLevel = avgAudioLevel;
+                        nearbyUserModel.setProperty(userIndex, "audioLevel", audioLevel);
+                        nearbyUserModelData[userIndex].audioLevel = audioLevel; // Defensive programming
+                        nearbyUserModel.setProperty(userIndex, "avgAudioLevel", avgAudioLevel);
+                        nearbyUserModelData[userIndex].avgAudioLevel = avgAudioLevel;
                     }
                 }
             }
@@ -843,20 +941,19 @@ Rectangle {
             break;
         case 'updateVisibility':
             usernameVisibility = message.params;
-            console.log('FIXME:', JSON.stringify(message));
             break;
         default:
             console.log('Unrecognized message:', JSON.stringify(message));
         }
     }
     function sortModel() {
-        var column = table.getColumn(table.sortIndicatorColumn);
+        var column = nearbyTable.getColumn(nearbyTable.sortIndicatorColumn);
         var sortProperty = column ? column.role : "displayName";
-        var before = (table.sortIndicatorOrder === Qt.AscendingOrder) ? -1 : 1;
+        var before = (nearbyTable.sortIndicatorOrder === Qt.AscendingOrder) ? -1 : 1;
         var after = -1 * before;
         // get selection(s) before sorting
         var selectedIDs = getSelectedSessionIDs();
-        userModelData.sort(function (a, b) {
+        nearbyUserModelData.sort(function (a, b) {
             var aValue = a[sortProperty].toString().toLowerCase(), bValue = b[sortProperty].toString().toLowerCase();
             switch (true) {
             case (aValue < bValue): return before;
@@ -864,12 +961,12 @@ Rectangle {
             default: return 0;
             }
         });
-        table.selection.clear();
+        nearbyTable.selection.clear();
 
-        userModel.clear();
+        nearbyUserModel.clear();
         var userIndex = 0;
         var newSelectedIndexes = [];
-        userModelData.forEach(function (datum) {
+        nearbyUserModelData.forEach(function (datum) {
             function init(property) {
                 if (datum[property] === undefined) {
                     datum[property] = false;
@@ -877,26 +974,26 @@ Rectangle {
             }
             ['personalMute', 'ignore', 'mute', 'kick'].forEach(init);
             datum.userIndex = userIndex++;
-            userModel.append(datum);
+            nearbyUserModel.append(datum);
             if (selectedIDs.indexOf(datum.sessionId) != -1) {
                  newSelectedIndexes.push(datum.userIndex);
             }
         });
         if (newSelectedIndexes.length > 0) {
-            table.selection.select(newSelectedIndexes);
-            table.positionViewAtRow(newSelectedIndexes[0], ListView.Beginning);
+            nearbyTable.selection.select(newSelectedIndexes);
+            nearbyTable.positionViewAtRow(newSelectedIndexes[0], ListView.Beginning);
         }
     }
     signal sendToScript(var message);
     function noticeSelection() {
         var userIds = [];
-        table.selection.forEach(function (userIndex) {
-            userIds.push(userModelData[userIndex].sessionId);
+        nearbyTable.selection.forEach(function (userIndex) {
+            userIds.push(nearbyUserModelData[userIndex].sessionId);
         });
         pal.sendToScript({method: 'selected', params: userIds});
     }
     Connections {
-        target: table.selection;
+        target: nearbyTable.selection;
         onSelectionChanged: pal.noticeSelection();
     }
 }
