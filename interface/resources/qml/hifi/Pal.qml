@@ -31,7 +31,7 @@ Rectangle {
     property int myCardHeight: 82;
     property int rowHeight: 70;
     property int actionButtonWidth: 55;
-    property int myNameCardWidth: palContainer.width - upperRightInfoContainer.width;
+    property int myNameCardWidth: palContainer.width - (activeTab == "nearbyTab" ? 70 : upperRightInfoContainer.width);
     property int nameCardWidth: table.width - (iAmAdmin ? (actionButtonWidth * 4) : (actionButtonWidth * 2)) - 4 - hifi.dimensions.scrollbarBackgroundWidth;
     property var myData: ({displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}); // valid dummy until set
     property var ignored: ({}); // Keep a local list of ignored avatars & their data. Necessary because HashMap is slow to respond after ignoring.
@@ -124,16 +124,7 @@ Rectangle {
                 height: 40;
                 anchors.top: parent.top;
                 anchors.right: parent.right;
-                HifiControls.CheckBox {
-                    id: inViewCheckbox;
-                    visible: activeTab == "nearbyTab";
-                    anchors.fill: parent;
-                    checked: settings.filtered;
-                    text: "in view";
-                    boxSize: reload.height * 0.70;
-                    onCheckedChanged: refreshWithFilter();
-                }
-                ComboBox {
+                HifiControls.TabletComboBox {
                     id: visibilityComboBox;
                     visible: activeTab == "connectionsTab";
                     anchors.fill: parent;
@@ -193,21 +184,7 @@ Rectangle {
                 Item {
                     id: nearbyTabSelectorTextContainer;
                     anchors.fill: parent;
-                    // Refresh button
-                    Rectangle {
-                        visible: activeTab == "nearbyTab";
-                        anchors.verticalCenter: parent.verticalCenter;
-                        anchors.right: parent.right;
-                        anchors.rightMargin: 6;
-                        height: reload.height;
-                        width: height;
-                        HifiControls.GlyphButton {
-                            id: reload;
-                            width: reload.height;
-                            glyph: hifi.glyphs.reload;
-                            onClicked: refreshWithFilter();
-                        }
-                    }
+                    anchors.leftMargin: 15;
                     // "NEARBY" text
                     RalewaySemiBold {
                         id: nearbyTabSelectorText;
@@ -220,8 +197,36 @@ Rectangle {
                         font.capitalization: Font.AllUppercase;
                         color: hifi.colors.redHighlight;
                         // Alignment
-                        horizontalAlignment: Text.AlignHCenter;
+                        horizontalAlignment: Text.AlignHLeft;
                         verticalAlignment: Text.AlignVCenter;
+                    }
+                    // "In View" Checkbox
+                    HifiControls.CheckBox {
+                        id: inViewCheckbox;
+                        visible: activeTab == "nearbyTab";
+                        anchors.right: reloadNearbyContainer.left;
+                        anchors.rightMargin: 25;
+                        anchors.verticalCenter: parent.verticalCenter;
+                        checked: settings.filtered;
+                        text: "in view";
+                        boxSize: 24;
+                        onCheckedChanged: refreshWithFilter();
+                    }
+                    // Refresh button
+                    Rectangle {
+                        id: reloadNearbyContainer
+                        visible: activeTab == "nearbyTab";
+                        anchors.verticalCenter: parent.verticalCenter;
+                        anchors.right: parent.right;
+                        anchors.rightMargin: 6;
+                        height: reloadNearby.height;
+                        width: height;
+                        HifiControls.GlyphButton {
+                            id: reloadNearby;
+                            width: reloadNearby.height;
+                            glyph: hifi.glyphs.reload;
+                            onClicked: refreshWithFilter();
+                        }
                     }
                 }
             }
@@ -247,17 +252,18 @@ Rectangle {
                 Item {
                     id: connectionsTabSelectorTextContainer;
                     anchors.fill: parent;
+                    anchors.leftMargin: 15;
                     // Refresh button
                     Rectangle {
                         visible: activeTab == "connectionsTab";
                         anchors.verticalCenter: parent.verticalCenter;
                         anchors.right: parent.right;
                         anchors.rightMargin: 6;
-                        height: reload.height;
+                        height: reloadConnections.height;
                         width: height;
                         HifiControls.GlyphButton {
                             id: reloadConnections;
-                            width: reload.height;
+                            width: reloadConnections.height;
                             glyph: hifi.glyphs.reload;
                             /*onClicked: refreshWithFilter();*/
                         }
@@ -274,7 +280,7 @@ Rectangle {
                         font.capitalization: Font.AllUppercase;
                         color: hifi.colors.redHighlight;
                         // Alignment
-                        horizontalAlignment: Text.AlignHCenter;
+                        horizontalAlignment: Text.AlignHLeft;
                         verticalAlignment: Text.AlignVCenter;
                     }
                 }
