@@ -33,12 +33,13 @@ Rectangle {
     property int actionButtonWidth: 55;
     property int myNameCardWidth: palContainer.width - (activeTab == "nearbyTab" ? 70 : upperRightInfoContainer.width);
     property int nameCardWidth: nearbyTable.width - (iAmAdmin ? (actionButtonWidth * 4) : (actionButtonWidth * 2)) - 4 - hifi.dimensions.scrollbarBackgroundWidth;
-    property var myData: ({displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}); // valid dummy until set
+    property var myData: ({profilePicUrl: "../../icons/defaultNameCardUser.png", displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}); // valid dummy until set
     property var ignored: ({}); // Keep a local list of ignored avatars & their data. Necessary because HashMap is slow to respond after ignoring.
     property var nearbyUserModelData: []; // This simple list is essentially a mirror of the nearbyUserModel listModel without all the extra complexities.
     property bool iAmAdmin: false;
     property var activeTab: "nearbyTab";
     property int usernameVisibility;
+    property bool currentlyEditingDisplayName: false
 
     HifiConstants { id: hifi; }
 
@@ -65,7 +66,7 @@ Rectangle {
     }
     function getSelectedSessionIDs() {
         var sessionIDs = [];
-        table.selection.forEach(function (userIndex) {
+        nearbyTable.selection.forEach(function (userIndex) {
             var datum = nearbyUserModelData[userIndex];
             if (datum) { // Might have been filtered out
                 sessionIDs.push(datum.sessionId);
@@ -109,6 +110,7 @@ Rectangle {
             NameCard {
                 id: myCard;
                 // Properties
+                profilePicUrl: myData.profilePicUrl;
                 displayName: myData.displayName;
                 userName: myData.userName;
                 audioLevel: myData.audioLevel;
@@ -494,8 +496,10 @@ Rectangle {
                 NameCard {
                     id: nameCard;
                     // Properties
+                    profilePicUrl: model ? model.profileUrl : "../../icons/defaultNameCardUser.png";
                     displayName: styleData.value;
                     userName: model ? model.userName : "";
+                    connectionStatus: model ? model.connection : "";
                     audioLevel: model ? model.audioLevel : 0.0;
                     avgAudioLevel: model ? model.avgAudioLevel : 0.0;
                     visible: !isCheckBox && !isButton && !isAvgAudio;
@@ -801,7 +805,7 @@ Rectangle {
 
         HifiControls.Keyboard {
             id: keyboard;
-            raised: myCard.currentlyEditingDisplayName && HMD.active;
+            raised: currentlyEditingDisplayName && HMD.mounted;
             numeric: parent.punctuationMode;
             anchors {
                 bottom: parent.bottom;
@@ -897,16 +901,15 @@ Rectangle {
             // The text that goes in the userName field is the second parameter in the message.
             var userName = message.params.userName;
             var admin = message.params.admin;
-            // If the userId is empty, we're updating "myData".
-            if (!userId) {
-                myData.userName = userName;
-                myCard.userName = userName; // Defensive programming
-            } else {
+            var connection = message.params.connection;
+            var profileUrl = message.params.profileUrl;
+            // If the userId is empty, we're probably updating "myData" (which should never happen with an "updateUsername" message).
+            if (userId) {
                 // Get the index in nearbyUserModel and nearbyUserModelData associated with the passed UUID
                 var userIndex = findSessionIndex(userId);
                 if (userIndex != -1) {
-                    // Set the userName appropriately
                     if (userName !== undefined) {
+                        // Set the userName appropriately
                         nearbyUserModel.setProperty(userIndex, "userName", userName);
                         nearbyUserModelData[userIndex].userName = userName; // Defensive programming
                     }
@@ -914,6 +917,16 @@ Rectangle {
                         // Set the admin status appropriately
                         nearbyUserModel.setProperty(userIndex, "admin", admin);
                         nearbyUserModelData[userIndex].admin = admin; // Defensive programming
+                    }
+                    if (connection !== undefined) {
+                        // Set the connection status appropriately
+                        nearbyUserModel.setProperty(userIndex, "connection", connection);
+                        nearbyUserModelData[userIndex].connection = connection; // Defensive programming
+                    }
+                    if (profileUrl !== undefined) {
+                        // Set the profileURL appropriately
+                        nearbyUserModel.setProperty(userIndex, "profileUrl", "https://metaverse.highfidelity.com" + profileUrl);
+                        nearbyUserModelData[userIndex].profileUrl = "https://metaverse.highfidelity.com" + profileUrl; // Defensive programming
                     }
                 }
             }
