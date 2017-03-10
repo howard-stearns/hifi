@@ -18,11 +18,7 @@ import "../styles-uit"
 Item {
     id: thisNameCard
     // Anchors
-    anchors {
-        verticalCenter: parent.verticalCenter
-        leftMargin: 10
-        rightMargin: 10
-    }
+    anchors.verticalCenter: parent.verticalCenter;
 
     // Properties
     property string profileUrl: "";
@@ -32,7 +28,7 @@ Item {
     property string displayName: ""
     property string userName: ""
     property real displayNameTextPixelSize: 18
-    property int usernameTextHeight: 12
+    property int usernameTextPixelSize: 14
     property real audioLevel: 0.0
     property real avgAudioLevel: 0.0
     property bool isMyCard: false
@@ -41,36 +37,37 @@ Item {
     property string userTextColor: (connectionStatus == "connection" ? hifi.colors.indigoAccent : (connectionStatus == "friend" ? hifi.colors.greenHighlight : hifi.colors.darkGray))
 
     Item {
-        id: avatarImage
-        visible: profileUrl !== "";
-        // Size
-        height: isMyCard ? 70 : 42
-        width: visible ? height : 0;
-        anchors.left: parent.left
-        anchors.leftMargin: (pal.activeTab == "nearbyTab" || isMyCard) ? -10 : 0;
-        anchors.verticalCenter: isMyCard ? undefined : parent.verticalCenter
-        Image {
-            id: userImage
-            source: ((0 === profileUrl.indexOf("http")) ? profileUrl : (defaultBaseUrl + profileUrl));
-            mipmap: true;
-            // Anchors
-            anchors.fill: parent
-        }
-        AnimatedImage {
-            source: "../../icons/profilePicLoading.gif"
-            anchors.fill: parent;
-            visible: userImage.status != Image.Ready;
-        }
-    }
-    Item {
-        id: textContainer
+        id: nameCardTextContainer
         // Size
         width: parent.width - avatarImage.width - anchors.leftMargin - parent.anchors.leftMargin - parent.anchors.rightMargin
-        height: selected || isMyCard ? childrenRect.height : childrenRect.height - 15
-        anchors.left: avatarImage.right
+        height: childrenRect.height
+        anchors.left: parent.left
         anchors.leftMargin: 5
         anchors.top: parent.top
         anchors.verticalCenter: parent.verticalCenter
+
+        Item {
+            id: avatarImage
+            visible: profileUrl !== "";
+            // Size
+            height: isMyCard ? 70 : 42
+            width: visible ? height : 0;
+            anchors.top: parent.top;
+            anchors.topMargin: 8;
+            anchors.left: parent.left
+            Image {
+                id: userImage
+                source: profileUrl !== "" ? ((0 === profileUrl.indexOf("http")) ? profileUrl : (defaultBaseUrl + profileUrl)) : "";
+                mipmap: true;
+                // Anchors
+                anchors.fill: parent
+            }
+            AnimatedImage {
+                source: "../../icons/profilePicLoading.gif"
+                anchors.fill: parent;
+                visible: userImage.status != Image.Ready;
+            }
+        }
 
         // DisplayName field for my card
         Rectangle {
@@ -80,8 +77,9 @@ Item {
             width: parent.width
             height: 40
             // Anchors
-            anchors.top: parent.top
-            anchors.left: parent.left
+            anchors.top: avatarImage.top
+            anchors.left: avatarImage.right
+            anchors.leftMargin: 5;
             // Style
             color: hifi.colors.textFieldLightBackground
             border.color: hifi.colors.blueHighlight
@@ -159,25 +157,18 @@ Item {
                 color: hifi.colors.baseGray
             }
         }
-        // Spacer for DisplayName for my card
-        Item {
-            id: myDisplayNameSpacer
-            width: 1
-            height: 4
-            // Anchors
-            anchors.top: myDisplayName.bottom
-        }
         // DisplayName container for others' cards
         Item {
             id: displayNameContainer
             visible: !isMyCard
             // Size
-            width: parent.width
+            width: parent.width - anchors.leftMargin;
             height: displayNameTextPixelSize + 4
             // Anchors
-            anchors.top: parent.top
-            anchors.topMargin: 8 + (pal.activeTab == "nearbyTab" ? 0 : 16);
-            anchors.left: parent.left
+            anchors.top: pal.activeTab == "connectionsTab" ? undefined : avatarImage.top;
+            anchors.bottom: pal.activeTab == "connectionsTab" ? avatarImage.bottom : undefined;
+            anchors.left: avatarImage.right
+            anchors.leftMargin: 5;
             // DisplayName Text for others' cards
             FiraSansSemiBold {
                 id: displayNameText
@@ -192,7 +183,7 @@ Item {
                 // Text Size
                 size: displayNameTextPixelSize
                 // Text Positioning
-                verticalAlignment: Text.AlignVCenter
+                verticalAlignment: Text.AlignTop
                 // Style
                 color: userTextColor;
                 MouseArea {
@@ -273,12 +264,15 @@ Item {
             visible: thisNameCard.displayName
             // Size
             width: parent.width
+            height: usernameTextPixelSize + 4
             // Anchors
-            anchors.top: isMyCard ? myDisplayNameSpacer.bottom : displayNameContainer.bottom
+            anchors.bottom: avatarImage.bottom
+            anchors.left: avatarImage.right;
+            anchors.leftMargin: 5;
             // Text Size
-            size: thisNameCard.usernameTextHeight
+            size: usernameTextPixelSize;
             // Text Positioning
-            verticalAlignment: Text.AlignVCenter
+            verticalAlignment: Text.AlignBottom
             // Style
             color: userTextColor
             MouseArea {
@@ -296,24 +290,16 @@ Item {
                     }
             }
         }
-
-        // Spacer
-        Item {
-            id: userNameSpacer
-            height: 4
-            width: parent.width
-            // Anchors
-            anchors.top: userNameText.bottom
-        }
-
         // VU Meter
         Rectangle {
             id: nameCardVUMeter
             // Size
-            width: isMyCard ? myDisplayName.width - 70 : ((gainSlider.value - gainSlider.minimumValue)/(gainSlider.maximumValue - gainSlider.minimumValue)) * parent.width
+            width: isMyCard ? myDisplayName.width - 70 : ((gainSlider.value - gainSlider.minimumValue)/(gainSlider.maximumValue - gainSlider.minimumValue)) * (gainSlider.width);
             height: 8
             // Anchors
-            anchors.top: userNameSpacer.bottom
+            anchors.bottom: isMyCard ? undefined : nameCardTextContainer.bottom
+            anchors.bottomMargin: 9;
+            anchors.left: parent.left;
             // Style
             radius: 4
             color: "#c5c5c5"
@@ -386,10 +372,11 @@ Item {
         Slider {
             id: gainSlider
             // Size
-            width: parent.width
+            width: thisNameCard.width;
             height: 14
             // Anchors
-            anchors.verticalCenter: nameCardVUMeter.verticalCenter
+            anchors.verticalCenter: nameCardVUMeter.verticalCenter;
+            anchors.left: nameCardVUMeter.left;
             // Properties
             visible: !isMyCard && selected && pal.activeTab == "nearbyTab";
             value: Users.getAvatarGain(uuid)
@@ -438,6 +425,8 @@ Item {
             }
         }
     }
+
+    
 
     function updateGainFromQML(avatarUuid, sliderValue, isReleased) {
         Users.setAvatarGain(avatarUuid, sliderValue);
