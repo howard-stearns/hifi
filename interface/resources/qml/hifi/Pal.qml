@@ -32,7 +32,7 @@ Rectangle {
     property int rowHeight: 70;
     property int actionButtonWidth: 55;
     property int locationColumnWidth: 170;
-    property int myNameCardWidth: palContainer.width - (activeTab == "nearbyTab" ? 70 : upperRightInfoContainer.width);
+    property int myNameCardWidth: palContainer.width - upperRightInfoContainer;
     property int nearbyNameCardWidth: nearbyTable.width - (iAmAdmin ? (actionButtonWidth * 4) : (actionButtonWidth * 2)) - 4 - hifi.dimensions.scrollbarBackgroundWidth;
     property int connectionsNameCardWidth: connectionsTable.width - locationColumnWidth - actionButtonWidth - 4 - hifi.dimensions.scrollbarBackgroundWidth;
     property var myData: ({profileUrl: "", displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}); // valid dummy until set
@@ -125,7 +125,7 @@ Rectangle {
             NameCard {
                 id: myCard;
                 // Properties
-                profilePicUrl: myData.profileUrl;
+                profileUrl: myData.profileUrl;
                 displayName: myData.displayName;
                 userName: myData.userName;
                 audioLevel: myData.audioLevel;
@@ -140,19 +140,18 @@ Rectangle {
             }
             Item {
                 id: upperRightInfoContainer;
-                width: 225;
+                width: 160;
                 height: 40;
                 anchors.top: parent.top;
                 anchors.right: parent.right;
                 HifiControls.TabletComboBox {
                     id: visibilityComboBox;
-                    visible: activeTab == "connectionsTab";
                     anchors.fill: parent;
                     currentIndex: usernameVisibility;
                     model: ListModel {
                         id: visibilityComboBoxListItems
-                        ListElement { text: "Visible to Everyone"; value: "all"; }
-                        ListElement { text: "Visible to Friends Only"; value: "friends"; }
+                        ListElement { text: "Everyone"; value: "all"; }
+                        ListElement { text: "Friends Only"; value: "friends"; }
                         ListElement { text: "Appear Offline"; value: "none" }
                     }
                     onCurrentIndexChanged: { pal.sendToScript({method: 'setVisibility', params: visibilityComboBoxListItems.get(currentIndex).value})}
@@ -190,7 +189,6 @@ Rectangle {
                 color: activeTab == "nearbyTab" ? pal.color : "#CCCCCC";
                 MouseArea {
                     anchors.fill: parent;
-                    acceptedButtons: Qt.LeftButton;
                     hoverEnabled: true;
                     onClicked: {
                         if (activeTab != "nearbyTab") {
@@ -262,7 +260,6 @@ Rectangle {
                 color: activeTab == "connectionsTab" ? pal.color : "#CCCCCC";
                 MouseArea {
                     anchors.fill: parent;
-                    acceptedButtons: Qt.LeftButton;
                     hoverEnabled: true;
                     onClicked: { activeTab = "connectionsTab";
                         pal.sendToScript({method: 'getVisibility'});
@@ -517,7 +514,7 @@ Rectangle {
                 NameCard {
                     id: nameCard;
                     // Properties
-                    profilePicUrl: (model && model.profileUrl) || "";
+                    profileUrl: (model && model.profileUrl) || "";
                     displayName: styleData.value;
                     userName: model ? model.userName : "";
                     connectionStatus: model ? model.connection : "";
@@ -527,7 +524,6 @@ Rectangle {
                     uuid: model ? model.sessionId : "";
                     selected: styleData.selected;
                     isAdmin: model && model.admin;
-                    isNearbyCard: true;
                     // Size
                     width: nearbyNameCardWidth;
                     height: parent.height;
@@ -554,7 +550,7 @@ Rectangle {
                         // cannot change mute status when ignoring
                         if (!model["ignore"]) {
                             var newValue = !model["personalMute"];
-                            nearbyUserModel.setProperty(model.userIndex, "personalMute", newValue);s
+                            nearbyUserModel.setProperty(model.userIndex, "personalMute", newValue);
                             nearbyUserModelData[model.userIndex]["personalMute"] = newValue; // Defensive programming
                             Users["personalMute"](model.sessionId, newValue);
                             UserActivityLogger["palAction"](newValue ? "personalMute" : "un-personalMute", model.sessionId);
@@ -669,7 +665,6 @@ Rectangle {
             }
             MouseArea {
                 anchors.fill: parent;
-                acceptedButtons: Qt.LeftButton;
                 hoverEnabled: true;
                 onClicked: letterbox(hifi.glyphs.question,
                                      "Display Names",
@@ -704,7 +699,6 @@ Rectangle {
             }
             MouseArea {
                 anchors.fill: parent;
-                acceptedButtons: Qt.LeftButton;
                 hoverEnabled: true;
                 onClicked: letterbox(hifi.glyphs.question,
                                      "Admin Actions",
@@ -722,6 +716,7 @@ Rectangle {
     *****************************************/
     Rectangle {
         id: connectionsTab;
+        color: "#E3E3E3";
         // Anchors
         anchors {
             top: tabSelectorContainer.bottom;
@@ -808,12 +803,11 @@ Rectangle {
                     id: connectionsNameCard;
                     // Properties
                     visible: styleData.role === "userName";
-                    profilePicUrl: (model && model.profileUrl) || "";
+                    profileUrl: (model && model.profileUrl) || "";
                     displayName: model ? model.userName : "";
                     userName: "";
                     connectionStatus : model ? model.connection : "";
                     selected: styleData.selected;
-                    isNearbyCard: false;
                     // Size
                     width: connectionsNameCardWidth;
                     height: parent.height;
@@ -840,7 +834,6 @@ Rectangle {
                     color: hifi.colors.darkGray;
                     MouseArea {
                         anchors.fill: parent
-                        acceptedButtons: Qt.LeftButton
                         hoverEnabled: true
                         onClicked: pal.sendToScript({method: 'goToUser', params: model.userName});
                         onEntered: {
@@ -902,7 +895,6 @@ Rectangle {
             }
             MouseArea {
                 anchors.fill: parent;
-                acceptedButtons: Qt.LeftButton;
                 hoverEnabled: true;
                 onClicked: letterbox(hifi.glyphs.question,
                                      "Connections",
@@ -1032,9 +1024,10 @@ Rectangle {
                         });
                     }
                 }
-            } else if (message.params.profileUrl) {
-                myData.profileUrl = message.params.profileUrl;
-                myCard.profilePicUrl = message.params.profileUrl;
+            // In this "else if" case, the only param of the message is the profile pic URL.
+            } else if (message.params) {
+                myData.profileUrl = message.params;
+                myCard.profileUrl = message.params;
             }
             break;
         case 'updateAudioLevel':
