@@ -329,6 +329,9 @@ function requestJSON(url, callback) { // callback(data) if successfull. Logs oth
         callback(response.data);
     });
 }
+function locationRoot (user) {
+    return user.location.domain || (user.location.root && user.location.root.domain);
+}
 function getProfilePicture(username, callback) { // callback(url) if successfull. (Logs otherwise)
     // FIXME Prototype scrapes profile picture. We should include in user status, and also make available somewhere for myself
     request(METAVERSE_BASE + '/users/' + username, function (error, html) {
@@ -380,7 +383,7 @@ function getAvailableConnections(domain, callback) { // callback([{usename, loca
         getData(function (users) {
             // The endpoint in getData doesn't take a domain filter. So filter out the unwanted stuff now.
             domain = domain.slice(1, -1); // without curly braces
-            users = users.filter(function (user) { var root = user.location.domain || user.location.root.domain; return root.id === domain; });
+            users = users.filter(function (user) { return locationRoot(user).id === domain; });
 
             // Now fill in the sessionUUID as if it were in the data all along.
             users.forEach(function (user) {
@@ -415,7 +418,7 @@ function getConnectionData(domain) { // Update all the usernames that I am entit
             userName: user.username,
             connection: user.connection,
             profileUrl: user.profileUrl,
-            placeName: user.location.root.name
+            placeName: (locationRoot(user) || {}).name || ''
         };
     }
     getAvailableConnections(domain, function (users) {

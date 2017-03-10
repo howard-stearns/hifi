@@ -35,7 +35,7 @@ Rectangle {
     property int myNameCardWidth: palContainer.width - (activeTab == "nearbyTab" ? 70 : upperRightInfoContainer.width);
     property int nearbyNameCardWidth: nearbyTable.width - (iAmAdmin ? (actionButtonWidth * 4) : (actionButtonWidth * 2)) - 4 - hifi.dimensions.scrollbarBackgroundWidth;
     property int connectionsNameCardWidth: connectionsTable.width - locationColumnWidth - actionButtonWidth - 4 - hifi.dimensions.scrollbarBackgroundWidth;
-    property var myData: ({profileUrl: "../../icons/defaultNameCardUser.png", displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}); // valid dummy until set
+    property var myData: ({profileUrl: "", displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}); // valid dummy until set
     property var ignored: ({}); // Keep a local list of ignored avatars & their data. Necessary because HashMap is slow to respond after ignoring.
     property var nearbyUserModelData: []; // This simple list is essentially a mirror of the nearbyUserModel listModel without all the extra complexities.
     property var connectionsUserModelData: []; // This simple list is essentially a mirror of the connectionsUserModel listModel without all the extra complexities.
@@ -125,7 +125,7 @@ Rectangle {
             NameCard {
                 id: myCard;
                 // Properties
-                profilePicUrl: myData.profilePicUrl;
+                profilePicUrl: myData.profileUrl;
                 displayName: myData.displayName;
                 userName: myData.userName;
                 audioLevel: myData.audioLevel;
@@ -445,11 +445,11 @@ Rectangle {
             sortIndicatorColumn: settings.nearbySortIndicatorColumn;
             sortIndicatorOrder: settings.nearbySortIndicatorOrder;
             onSortIndicatorColumnChanged: {
-                settings.nearbySortIndicatorColumn = nearbySortIndicatorColumn;
+                settings.nearbySortIndicatorColumn = sortIndicatorColumn;
                 sortModel();
             }
             onSortIndicatorOrderChanged: {
-                settings.nearbySortIndicatorOrder = nearbySortIndicatorOrder;
+                settings.nearbySortIndicatorOrder = sortIndicatorOrder;
                 sortModel();
             }
 
@@ -517,7 +517,7 @@ Rectangle {
                 NameCard {
                     id: nameCard;
                     // Properties
-                    profilePicUrl: model ? model.profileUrl : "../../icons/defaultNameCardUser.png";
+                    profilePicUrl: (model && model.profileUrl) || "";
                     displayName: styleData.value;
                     userName: model ? model.userName : "";
                     connectionStatus: model ? model.connection : "";
@@ -808,7 +808,7 @@ Rectangle {
                     id: connectionsNameCard;
                     // Properties
                     visible: styleData.role === "userName";
-                    profilePicUrl: model ? model.profileUrl : "../../icons/defaultNameCardUser.png";
+                    profilePicUrl: (model && model.profileUrl) || "";
                     displayName: model ? model.userName : "";
                     userName: "";
                     connectionStatus : model ? model.connection : "";
@@ -826,7 +826,7 @@ Rectangle {
                     id: connectionsLocationData
                     // Properties
                     visible: styleData.role === "placeName";
-                    text: model ? model.placeName : "";
+                    text: (model && model.placeName) || "";
                     elide: Text.ElideRight;
                     // Size
                     width: parent.width;
@@ -979,9 +979,6 @@ Rectangle {
             break;
         case 'connections':
             var data = message.params;
-            for (var connectionID in data) {
-                data[connectionID].profileUrl = prependBaseUrl(data[connectionID].profileUrl);
-            }
             connectionsUserModelData = data;
             sortConnectionsModel();
             connectionsLoading.visible = false;
@@ -1019,40 +1016,25 @@ Rectangle {
         case 'updateUsername':
             // The User ID (UUID) is the first parameter in the message.
             var userId = message.params.sessionId;
-            // The text that goes in the userName field is the second parameter in the message.
-            var userName = message.params.userName;
-            var admin = message.params.admin;
-            var connection = message.params.connection;
-            var profileUrl = message.params.profileUrl;
             // If the userId is empty, we're probably updating "myData".
             if (userId) {
                 // Get the index in nearbyUserModel and nearbyUserModelData associated with the passed UUID
                 var userIndex = findNearbySessionIndex(userId);
-                if (userIndex != -1) {
-                    if (userName !== undefined) {
-                        // Set the userName appropriately
-                        nearbyUserModel.setProperty(userIndex, "userName", userName);
-                        nearbyUserModelData[userIndex].userName = userName; // Defensive programming
-                    }
-                    if (admin !== undefined) {
-                        // Set the admin status appropriately
-                        nearbyUserModel.setProperty(userIndex, "admin", admin);
-                        nearbyUserModelData[userIndex].admin = admin; // Defensive programming
-                    }
-                    if (connection !== undefined) {
-                        // Set the connection status appropriately
-                        nearbyUserModel.setProperty(userIndex, "connection", connection);
-                        nearbyUserModelData[userIndex].connection = connection; // Defensive programming
-                    }
-                    if (profileUrl !== undefined) {
-                        // Set the profileURL appropriately
-                        nearbyUserModel.setProperty(userIndex, "profileUrl", prependBaseUrl(profileUrl));
-                        nearbyUserModelData[userIndex].profileUrl = prependBaseUrl(profileUrl); // Defensive programming
+                function setProperty(name) {
+                    if (userIndex !== -1) {
+                        ['userName', 'admin', 'connection', 'profileUrl', 'placeName'].forEach(function (name) {
+                            var value = message.params[name];
+                            if (value === undefined) {
+                                return;
+                            }
+                            nearbyUserModel.setProperty(userIndex, name, value);
+                            nearbyUserModelData[userIndex][name] = value; // for refill after sort
+                        });
                     }
                 }
-            } else {
-                myData.profileUrl = message.params;
-                myCard.profilePicUrl = message.params; // Defensive programming
+            } else if (message.params.profileUrl) {
+                myData.profileUrl = message.params.profileUrl;
+                myCard.profilePicUrl = message.params.profileUrl;
             }
             break;
         case 'updateAudioLevel':
@@ -1116,7 +1098,7 @@ Rectangle {
                     datum[property] = false;
                 }
             }
-            ['personalMute', 'ignore', 'mute', 'kick'].forEach(init);
+            ['personalMute', 'ignore', 'mute', 'kick', 'admin', 'userName', 'profilePic', 'placeName', 'connection'].forEach(init);
             datum.userIndex = userIndex++;
             nearbyUserModel.append(datum);
             if (selectedIDs.indexOf(datum.sessionId) != -1) {
@@ -1167,16 +1149,6 @@ Rectangle {
             userIds.push(nearbyUserModelData[userIndex].sessionId);
         });
         pal.sendToScript({method: 'selected', params: userIds});
-    }
-    function prependBaseUrl(urlToPrepend) {
-        var baseUrl = "https://metaverse.highfidelity.com";
-        var finalUrl = urlToPrepend;
-
-        if (finalUrl.indexOf("https://hifi-metaverse") === -1) {
-            finalUrl = baseUrl + urlToPrepend;
-        }
-
-        return finalUrl;
     }
     Connections {
         target: nearbyTable.selection;
