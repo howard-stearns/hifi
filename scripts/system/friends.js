@@ -23,7 +23,11 @@ const STATE_STRINGS = ["inactive", "waiting", "friending"];
 const WAITING_INTERVAL = 100; // ms
 const FRIENDING_INTERVAL = 100; // ms
 const FRIENDING_TIME = 3000; // ms
-const OVERLAY_COLORS = [{red: 0x00, green: 0xFF, blue: 0x00}, {red: 0x00, green: 0xFF, blue: 0xFF}];
+const OVERLAY_COLORS = [{red: 0x00, green: 0xFF, blue: 0x00}, {red: 0x00, green: 0x00, blue: 0xFF}];
+const ANIM_VAR_NAME = 'rightHandPosition';
+const FRIENDING_HAPTIC_STRENGTH = 0.5;
+const FRIENDING_SUCCESS_HAPTIC_STRENGTH = 1.0;
+const HAPTIC_DURATION = 20;
 
 var currentHand;
 var isWaiting = false;
@@ -33,6 +37,7 @@ var waitingInterval;
 var friendingInterval;
 var overlay;
 var makingFriends = false; // really just for visualizations for now
+var animHandlerId;
 
 function debug() {
     var stateString = "<" + STATE_STRINGS[state] + ">";
@@ -49,6 +54,16 @@ function handToString(hand) {
     return "";
 }
 
+function handToHaptic(hand) {
+    if (hand === Controller.Standard.RightHand) {
+        return 1;
+    } else if (hand === Controller.Standard.LeftHand) {
+        return 0;
+    }
+    return -1;
+}
+
+
 function getHandPosition(avatar, hand) {
     if (!hand) {
         debug("calling getHandPosition with no hand!");
@@ -56,6 +71,22 @@ function getHandPosition(avatar, hand) {
     }
     var jointName = handToString(hand);
     return avatar.getJointPosition(avatar.getJointIndex(jointName));
+}
+
+function shakeHandsAnimation(animationProperties) {
+    // all we are doing here is moving the right hand to a spot
+    // that is in front of and a bit above the hips.  Basing how
+    // far in front as scaling with the avatar's height (say hips
+    // to head distance)
+    var headIndex = MyAvatar.getJointIndex("Head");
+    var offset = 0.5; // default distance of hand in front of you
+    var result = {};
+    if (headIndex) {
+        offset = 0.8 * MyAvatar.getAbsoluteJointTranslationInObjectFrame(headIndex).y;
+    }
+    var handPos = Vec3.multiply(offset, {x: -0.25, y: 1.2, z: 1.3});
+    result[ANIM_VAR_NAME] = handPos;
+    return result;
 }
 
 // this is called frequently, but usually does nothing
@@ -75,13 +106,15 @@ function updateOverlays() {
         color = { red: 0xFF, green: 0x00, blue: 0x00 };
     }
 
+    // TODO: make the size scale with avatar, up to
+    // the actual size of MAX_AVATAR_DISTANCE
     if (!overlay) {
         var props =  {
             solid: true,
             alpha: 0.5,
             color: color,
             position: position,
-            dimensions: MAX_AVATAR_DISTANCE
+            dimensions: MAX_AVATAR_DISTANCE / 3
         }
         overlay = Overlays.addOverlay("sphere", props);
     } else {
@@ -112,7 +145,11 @@ function findNearbyAvatars() {
     return nearbyAvatars;
 }
 
-function startHandshake() {
+function startHandshake(fromKeyboard) {
+    if (fromKeyboard) {
+        debug("adding animation");
+        animHandlerId = MyAvatar.addAnimationStateHandler(shakeHandsAnimation, [ANIM_VAR_NAME]);
+    }
     debug("starting handshake for", currentHand);
     state = STATES.waiting;
     waitingInterval = Script.setInterval(
@@ -134,6 +171,10 @@ function endHandshake() {
     if (friendingInterval) {
         friendingInterval = Script.clearInterval(friendingInterval);
     }
+    if (animHandlerId) {
+        debug("removing animation");
+        MyAvatar.removeAnimationStateHandler(animHandlerId);
+    }
 }
 
 function updateTriggers(value, fromKeyboard, hand) {
@@ -151,7 +192,7 @@ function updateTriggers(value, fromKeyboard, hand) {
         if (state != STATES.inactive) {
             return;
         } else {
-            startHandshake();
+            startHandshake(fromKeyboard);
         }
     } else {
         if (state != STATES.inactive) {
@@ -180,6 +221,7 @@ function isNearby(id, hand) {
 function makeFriends(id) {
     // temp code to just flash the overlay really
     makingFriends = true;
+    Controller.triggerHapticPulse(FRIENDING_SUCCESS_HAPTIC_STRENGTH, HAPTIC_DURATION, handToHaptic(currentHand));
     Script.setTimeout(function () { makingFriends = false; }, 1000);
 }
 // we change states, start the friendingInterval where we check
@@ -190,6 +232,7 @@ function startFriending(id, hand) {
     var count = 0;
     debug("friending", id, "hand", hand);
     state = STATES.friending;
+    Controller.triggerHapticPulse(FRIENDING_HAPTIC_STRENGTH, HAPTIC_DURATION, handToHaptic(currentHand));
     if (waitingInterval) {
         waitingInterval = Script.clearInterval(waitingInterval);
     }
