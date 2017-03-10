@@ -25,8 +25,7 @@ Item {
     }
 
     // Properties
-    property string profilePicUrl: defaultProfilePicUrl;
-    property string defaultProfilePicUrl: "../../icons/defaultNameCardUser.png";
+    property string profileUrl: "";
     property string defaultBaseUrl: "http://highfidelity.com";
     property string connectionStatus : ""
     property string uuid: ""
@@ -40,19 +39,19 @@ Item {
     property bool selected: false
     property bool isAdmin: false
     property string userTextColor: (connectionStatus == "connection" ? hifi.colors.indigoAccent : (connectionStatus == "friend" ? hifi.colors.greenHighlight : hifi.colors.darkGray))
-    property bool isNearbyCard: false;
 
     Item {
         id: avatarImage
+        visible: profileUrl !== "";
         // Size
-        height: isMyCard ? (pal.activeTab == "nearbyTab" ? 70 : myDisplayName.height) : 35
-        width: height
+        height: isMyCard ? 70 : 42
+        width: visible ? height : 0;
         anchors.left: parent.left
-        anchors.leftMargin: isNearbyCard ? -10 : 0;
+        anchors.leftMargin: (pal.activeTab == "nearbyTab" || isMyCard) ? -10 : 0;
         anchors.verticalCenter: isMyCard ? undefined : parent.verticalCenter
         Image {
             id: userImage
-            source: profilePicUrl ? ((0 === profilePicUrl.indexOf("http")) ? profilePicUrl : (defaultBaseUrl + profilePicUrl)) : defaultProfilePicUrl;
+            source: ((0 === profileUrl.indexOf("http")) ? profileUrl : (defaultBaseUrl + profileUrl));
             mipmap: true;
             // Anchors
             anchors.fill: parent
@@ -126,7 +125,6 @@ Item {
             }
             MouseArea {
                 anchors.fill: parent
-                acceptedButtons: Qt.LeftButton
                 hoverEnabled: true
                 onClicked: {
                     myDisplayName.border.width = 1
@@ -178,7 +176,7 @@ Item {
             height: displayNameTextPixelSize + 4
             // Anchors
             anchors.top: parent.top
-            anchors.topMargin: 8 + (isNearbyCard ? 0 : 8);
+            anchors.topMargin: 8 + (pal.activeTab == "nearbyTab" ? 0 : 16);
             anchors.left: parent.left
             // DisplayName Text for others' cards
             FiraSansSemiBold {
@@ -199,8 +197,7 @@ Item {
                 color: userTextColor;
                 MouseArea {
                     anchors.fill: parent
-                    acceptedButtons: Qt.LeftButton
-                    enabled: selected && isNearbyCard
+                    enabled: selected && pal.activeTab == "nearbyTab"
                     hoverEnabled: true
                     onClicked: pal.sendToScript({method: 'goToUser', params: thisNameCard.userName});
                     onEntered: {
@@ -257,7 +254,6 @@ Item {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    acceptedButtons: Qt.LeftButton
                     hoverEnabled: true
                     onClicked: letterbox(hifi.glyphs.question,
                     "Domain Admin",
@@ -287,8 +283,7 @@ Item {
             color: userTextColor
             MouseArea {
                 anchors.fill: parent
-                acceptedButtons: Qt.LeftButton
-                enabled: selected && isNearbyCard
+                enabled: selected && pal.activeTab == "nearbyTab"
                 hoverEnabled: true
                 onClicked: pal.sendToScript({method: 'goToUser', params: thisNameCard.userName});
                     onEntered: {
@@ -322,7 +317,7 @@ Item {
             // Style
             radius: 4
             color: "#c5c5c5"
-            visible: (isMyCard || selected) && isNearbyCard
+            visible: (isMyCard || selected) && pal.activeTab == "nearbyTab"
             // Rectangle for the zero-gain point on the VU meter
             Rectangle {
                 id: vuMeterZeroGain
@@ -396,7 +391,7 @@ Item {
             // Anchors
             anchors.verticalCenter: nameCardVUMeter.verticalCenter
             // Properties
-            visible: !isMyCard && selected && isNearbyCard
+            visible: !isMyCard && selected && pal.activeTab == "nearbyTab";
             value: Users.getAvatarGain(uuid)
             minimumValue: -60.0
             maximumValue: 20.0
