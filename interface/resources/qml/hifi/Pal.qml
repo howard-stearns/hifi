@@ -28,20 +28,20 @@ Rectangle {
     // Style
     color: "#E3E3E3";
     // Properties
+    property int myCardWidth: palContainer.width - upperRightInfoContainer.width;
     property int myCardHeight: 82;
     property int rowHeight: 60;
     property int actionButtonWidth: 55;
     property int locationColumnWidth: 170;
-    property int myNameCardWidth: palContainer.width - upperRightInfoContainer;
     property int nearbyNameCardWidth: nearbyTable.width - (iAmAdmin ? (actionButtonWidth * 4) : (actionButtonWidth * 2)) - 4 - hifi.dimensions.scrollbarBackgroundWidth;
     property int connectionsNameCardWidth: connectionsTable.width - locationColumnWidth - actionButtonWidth - 4 - hifi.dimensions.scrollbarBackgroundWidth;
-    property var myData: ({profileUrl: "", displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}); // valid dummy until set
+    property var myData: ({profileUrl: "", displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true, placeName: "", connection: ""}); // valid dummy until set
     property var ignored: ({}); // Keep a local list of ignored avatars & their data. Necessary because HashMap is slow to respond after ignoring.
     property var nearbyUserModelData: []; // This simple list is essentially a mirror of the nearbyUserModel listModel without all the extra complexities.
     property var connectionsUserModelData: []; // This simple list is essentially a mirror of the connectionsUserModel listModel without all the extra complexities.
     property bool iAmAdmin: false;
     property var activeTab: "nearbyTab";
-    property int usernameVisibility;
+    property int usernameAvailability;
     property bool currentlyEditingDisplayName: false
 
     HifiConstants { id: hifi; }
@@ -132,7 +132,7 @@ Rectangle {
                 avgAudioLevel: myData.avgAudioLevel;
                 isMyCard: true;
                 // Size
-                width: myNameCardWidth;
+                width: myCardWidth;
                 height: parent.height;
                 // Anchors
                 anchors.top: parent.top
@@ -141,20 +141,40 @@ Rectangle {
             Item {
                 id: upperRightInfoContainer;
                 width: 160;
-                height: 40;
+                height: parent.height;
                 anchors.top: parent.top;
                 anchors.right: parent.right;
+                
+                RalewaySemiBold {
+                    id: availabilityText;
+                    text: "set availability";
+                    // Text size
+                    size: hifi.fontSizes.tabularData;
+                    // Anchors
+                    anchors.top: availabilityComboBox.bottom;
+                    anchors.horizontalCenter: parent.horizontalCenter;
+                    // Style
+                    color: hifi.colors.baseGrayHighlight;
+                    // Alignment
+                    horizontalAlignment: Text.AlignHCenter;
+                    verticalAlignment: Text.AlignTop;
+                }
                 HifiControls.TabletComboBox {
-                    id: visibilityComboBox;
-                    anchors.fill: parent;
-                    currentIndex: usernameVisibility;
+                    id: availabilityComboBox;
+                    // Anchors
+                    anchors.top: parent.top;
+                    anchors.horizontalCenter: parent.horizontalCenter;
+                    // Size
+                    width: parent.width;
+                    height: 40;
+                    currentIndex: usernameAvailability;
                     model: ListModel {
-                        id: visibilityComboBoxListItems
+                        id: availabilityComboBoxListItems
                         ListElement { text: "Everyone"; value: "all"; }
                         ListElement { text: "Friends Only"; value: "friends"; }
                         ListElement { text: "Appear Offline"; value: "none" }
                     }
-                    onCurrentIndexChanged: { pal.sendToScript({method: 'setVisibility', params: visibilityComboBoxListItems.get(currentIndex).value})}
+                    onCurrentIndexChanged: { pal.sendToScript({method: 'setAvailability', params: availabilityComboBoxListItems.get(currentIndex).value})}
                 }
             }
         }
@@ -262,7 +282,6 @@ Rectangle {
                     anchors.fill: parent;
                     hoverEnabled: true;
                     onClicked: { activeTab = "connectionsTab";
-                        pal.sendToScript({method: 'getVisibility'});
                         connectionsLoading.visible = true;
                         pal.sendToScript({method: 'refreshConnections'}); }
                 }
@@ -899,8 +918,8 @@ Rectangle {
                 hoverEnabled: true;
                 onClicked: letterbox(hifi.glyphs.question,
                                      "Connections",
-                                     "<font color='purple'>Purple names are <b>connections</b>.</font> When your visibility is set to Everyone, Connections can see your username and location.<br><br>"+
-                                     "<font color='green'>Green names are <b>friends</b>.</font> When your visibility is set to Friends, only Friends can see your username and location.");
+                                     "<font color='purple'>Purple names are <b>connections</b>.</font> When your availability is set to Everyone, Connections can see your username and location.<br><br>"+
+                                     "<font color='green'>Green names are <b>friends</b>.</font> When your availability is set to Friends, only Friends can see your username and location.");
                 onEntered: connectionsNamesHelpText.color = hifi.colors.baseGrayHighlight;
                 onExited: connectionsNamesHelpText.color = hifi.colors.darkGray;
             }
@@ -1024,9 +1043,9 @@ Rectangle {
                     });
                 }
             // In this "else if" case, the only param of the message is the profile pic URL.
-            } else if (message.params) {
-                myData.profileUrl = message.params;
-                myCard.profileUrl = message.params;
+            } else if (message.params.profileUrl) {
+                myData.profileUrl = message.params.profileUrl;
+                myCard.profileUrl = message.params.profileUrl;
             }
             break;
         case 'updateAudioLevel':
@@ -1057,8 +1076,8 @@ Rectangle {
             var sessionID = message.params[0];
             delete ignored[sessionID];
             break;
-        case 'updateVisibility':
-            usernameVisibility = message.params;
+        case 'updateAvailability':
+            usernameAvailability = message.params;
             break;
         default:
             console.log('Unrecognized message:', JSON.stringify(message));

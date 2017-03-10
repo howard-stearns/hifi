@@ -272,11 +272,14 @@ function fromQml(message) { // messages are {method, params}, like json-rpc. See
         break;
     case 'goToUser':
         location.goToUser(message.params);
+        UserActivityLogger.palAction("go_to_user", "");
         break;
-    case 'setVisibility':
+    case 'setAvailability':
         GlobalServices.findableBy = message.params;
+        UserActivityLogger.palAction("set_availability", "");
+        print('Setting availability:', JSON.stringify(message));
         break;
-    case 'getVisibility':
+    case 'getAvailability':
         findableByChanged(GlobalServices.findableBy);
         break;
     default:
@@ -502,7 +505,7 @@ function populateNearbyUserList(selectData, oldAudioData) {
             // Return our username from the Account API
             avatarPalDatum.userName = Account.username;
             getProfilePicture(avatarPalDatum.userName, function (url) {
-                sendToQml({ method: 'updateUsername', params: url });
+                sendToQml({ method: 'updateUsername', params: { profileUrl: url } });
             });
         }
         data.push(avatarPalDatum);
@@ -745,6 +748,7 @@ function onTabletButtonClicked() {
         onPalScreen = true;
         Users.requestsDomainListData = true;
         populateNearbyUserList();
+        findableByChanged(GlobalServices.findableBy);
         isWired = true;
         Script.update.connect(updateOverlays);
         Controller.mousePressEvent.connect(handleMouseEvent);
@@ -854,18 +858,18 @@ function avatarDisconnected(nodeID) {
     sendToQml({method: 'avatarDisconnected', params: [nodeID]});
 }
 
-function findableByChanged(usernameVisibility) {
-    // Update PAL visibility dropdown
+function findableByChanged(usernameAvailability) {
+    // Update PAL availability dropdown
     // Default to "friends" if undeterminable
-    var visibility = 1;
-    if (usernameVisibility === "all") {
-        visibility = 0;
-    } else if (usernameVisibility === "friends") {
-        visibility = 1;
-    } else if (usernameVisibility === "none") {
-        visibility = 2;
+    var availability = 1;
+    if (usernameAvailability === "all") {
+        availability = 0;
+    } else if (usernameAvailability === "friends") {
+        availability = 1;
+    } else if (usernameAvailability === "none") {
+        availability = 2;
     }
-    sendToQml({ method: 'updateVisibility', params: visibility });
+    sendToQml({ method: 'updateAvailability', params: availability });
 }
 
 function clearLocalQMLDataAndClosePAL() {
