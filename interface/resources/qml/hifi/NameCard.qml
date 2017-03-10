@@ -38,6 +38,7 @@ Item {
     property bool selected: false
     property bool isAdmin: false
     property string userTextColor: (connectionStatus == "connection" ? hifi.colors.indigoAccent : (connectionStatus == "friend" ? hifi.colors.greenHighlight : hifi.colors.darkGray))
+    property bool isNearbyCard: false;
 
     Item {
         id: avatarImage
@@ -45,7 +46,7 @@ Item {
         height: isMyCard ? (pal.activeTab == "nearbyTab" ? 70 : myDisplayName.height) : 35
         width: height
         anchors.left: parent.left
-        anchors.leftMargin: -10
+        anchors.leftMargin: isNearbyCard ? -10 : 0;
         anchors.verticalCenter: isMyCard ? undefined : parent.verticalCenter
         Image {
             id: userImage
@@ -197,7 +198,7 @@ Item {
                 MouseArea {
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton
-                    enabled: selected
+                    enabled: selected && isNearbyCard
                     hoverEnabled: true
                     onClicked: pal.sendToScript({method: 'goToUser', params: thisNameCard.userName});
                     onEntered: {
@@ -285,7 +286,7 @@ Item {
             MouseArea {
                 anchors.fill: parent
                 acceptedButtons: Qt.LeftButton
-                enabled: selected
+                enabled: selected && isNearbyCard
                 hoverEnabled: true
                 onClicked: pal.sendToScript({method: 'goToUser', params: thisNameCard.userName});
                     onEntered: {
@@ -319,7 +320,7 @@ Item {
             // Style
             radius: 4
             color: "#c5c5c5"
-            visible: isMyCard || selected
+            visible: (isMyCard || selected) && isNearbyCard
             // Rectangle for the zero-gain point on the VU meter
             Rectangle {
                 id: vuMeterZeroGain
@@ -393,7 +394,7 @@ Item {
             // Anchors
             anchors.verticalCenter: nameCardVUMeter.verticalCenter
             // Properties
-            visible: !isMyCard && selected
+            visible: !isMyCard && selected && isNearbyCard
             value: Users.getAvatarGain(uuid)
             minimumValue: -60.0
             maximumValue: 20.0
