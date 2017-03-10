@@ -29,7 +29,7 @@ Rectangle {
     color: "#E3E3E3";
     // Properties
     property int myCardHeight: 82;
-    property int rowHeight: 70;
+    property int rowHeight: 60;
     property int actionButtonWidth: 55;
     property int locationColumnWidth: 170;
     property int myNameCardWidth: palContainer.width - upperRightInfoContainer;
@@ -496,7 +496,7 @@ Rectangle {
             // This Rectangle refers to each Row in the nearbyTable.
             rowDelegate: Rectangle { // The only way I know to specify a row height.
                 // Size
-                height: styleData.selected ? rowHeight : rowHeight - 15;
+                height: styleData.selected ? rowHeight + 15 : rowHeight;
                 color: styleData.selected
                     ? hifi.colors.orangeHighlight
                     : styleData.alternate ? hifi.colors.tableRowLightEven : hifi.colors.tableRowLightOdd;
@@ -788,7 +788,7 @@ Rectangle {
             // This Rectangle refers to each Row in the connectionsTable.
             rowDelegate: Rectangle {
                 // Size
-                height: rowHeight - 15;
+                height: rowHeight;
                 color: styleData.selected
                     ? hifi.colors.orangeHighlight
                     : styleData.alternate ? hifi.colors.tableRowLightEven : hifi.colors.tableRowLightOdd;
@@ -835,6 +835,7 @@ Rectangle {
                     MouseArea {
                         anchors.fill: parent
                         hoverEnabled: true
+                        enabled: connectionsNameCard.selected && pal.activeTab == "connectionsTab"
                         onClicked: pal.sendToScript({method: 'goToUser', params: model.userName});
                         onEntered: {
                             connectionsLocationData.color = hifi.colors.blueHighlight;
@@ -1012,17 +1013,15 @@ Rectangle {
             if (userId) {
                 // Get the index in nearbyUserModel and nearbyUserModelData associated with the passed UUID
                 var userIndex = findNearbySessionIndex(userId);
-                function setProperty(name) {
-                    if (userIndex !== -1) {
-                        ['userName', 'admin', 'connection', 'profileUrl', 'placeName'].forEach(function (name) {
-                            var value = message.params[name];
-                            if (value === undefined) {
-                                return;
-                            }
-                            nearbyUserModel.setProperty(userIndex, name, value);
-                            nearbyUserModelData[userIndex][name] = value; // for refill after sort
-                        });
-                    }
+                if (userIndex !== -1) {
+                    ['userName', 'admin', 'connection', 'profileUrl', 'placeName'].forEach(function (name) {
+                        var value = message.params[name];
+                        if (value === undefined) {
+                            return;
+                        }
+                        nearbyUserModel.setProperty(userIndex, name, value);
+                        nearbyUserModelData[userIndex][name] = value; // for refill after sort
+                    });
                 }
             // In this "else if" case, the only param of the message is the profile pic URL.
             } else if (message.params) {
@@ -1088,10 +1087,16 @@ Rectangle {
         nearbyUserModelData.forEach(function (datum) {
             function init(property) {
                 if (datum[property] === undefined) {
-                    datum[property] = false;
+                    // These properties must have values of type 'string'.
+                    if (property === 'userName' || property === 'profileUrl' || property === 'placeName' || property === 'connection') {
+                        datum[property] = "";
+                    // All other properties must have values of type 'bool'.
+                    } else {
+                        datum[property] = false;
+                    }
                 }
             }
-            ['personalMute', 'ignore', 'mute', 'kick', 'admin', 'userName', 'profilePic', 'placeName', 'connection'].forEach(init);
+            ['personalMute', 'ignore', 'mute', 'kick', 'admin', 'userName', 'profileUrl', 'placeName', 'connection'].forEach(init);
             datum.userIndex = userIndex++;
             nearbyUserModel.append(datum);
             if (selectedIDs.indexOf(datum.sessionId) != -1) {
