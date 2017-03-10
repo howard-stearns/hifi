@@ -1,6 +1,6 @@
 "use strict";
 /*jslint vars:true, plusplus:true, forin:true*/
-/*global Tablet, Settings, Script, AvatarList, Users, Entities, MyAvatar, Camera, Overlays, Vec3, Quat, HMD, Controller, UserActivityLogger, Messages, Window, XMLHttpRequest, print, location, getControllerWorldLocation, GlobalServices*/
+/*global Tablet, Settings, Script, AvatarList, Users, Entities, MyAvatar, Camera, Overlays, Vec3, Quat, HMD, Controller, Account, UserActivityLogger, Messages, Window, XMLHttpRequest, print, location, getControllerWorldLocation, GlobalServices*/
 /* eslint indent: ["error", 4, { "outerIIFEBody": 0 }] */
 //
 // pal.js
@@ -14,7 +14,7 @@
 
 (function() { // BEGIN LOCAL_SCOPE
 
-var populateNearbyUserList, color, textures, removeOverlays, controllerComputePickRay, onTabletButtonClicked, onTabletScreenChanged, receiveMessage, avatarDisconnected, clearLocalQMLDataAndClosePAL, createAudioInterval, tablet, CHANNEL, getConnectionData; // forward references;
+var populateNearbyUserList, color, textures, removeOverlays, controllerComputePickRay, onTabletButtonClicked, onTabletScreenChanged, receiveMessage, avatarDisconnected, clearLocalQMLDataAndClosePAL, createAudioInterval, tablet, CHANNEL, getConnectionData, findableByChanged; // forward references;
 
 // hardcoding these as it appears we cannot traverse the originalTextures in overlays???  Maybe I've missed
 // something, will revisit as this is sorta horrible.
@@ -414,7 +414,8 @@ function getConnectionData(domain) { // Update all the usernames that I am entit
             sessionId: user.location.sessionUUID || '',
             userName: user.username,
             connection: user.connection,
-            profileUrl: user.profileUrl
+            profileUrl: user.profileUrl,
+            placeName: user.location.root.name
         };
     }
     getAvailableConnections(domain, function (users) {
@@ -854,14 +855,14 @@ function findableByChanged(usernameVisibility) {
     // Update PAL visibility dropdown
     // Default to "friends" if undeterminable
     var visibility = 1;
-    if (usernameVisibility == "all") {
+    if (usernameVisibility === "all") {
         visibility = 0;
-    } else if (usernameVisibility == "friends") {
+    } else if (usernameVisibility === "friends") {
         visibility = 1;
-    } else if (usernameVisibility == "none") {
+    } else if (usernameVisibility === "none") {
         visibility = 2;
     }
-    sendToQml({ method: 'updateVisibility', params: visibility })
+    sendToQml({ method: 'updateVisibility', params: visibility });
 }
 
 function clearLocalQMLDataAndClosePAL() {
