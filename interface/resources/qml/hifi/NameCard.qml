@@ -25,7 +25,9 @@ Item {
     }
 
     // Properties
-    property string profilePicUrl: "../../icons/defaultNameCardUser.png"
+    property string profilePicUrl: defaultProfilePicUrl;
+    property string defaultProfilePicUrl: "../../icons/defaultNameCardUser.png";
+    property string defaultBaseUrl: "http://highfidelity.com";
     property string connectionStatus : ""
     property string uuid: ""
     property string displayName: ""
@@ -50,7 +52,7 @@ Item {
         anchors.verticalCenter: isMyCard ? undefined : parent.verticalCenter
         Image {
             id: userImage
-            source: profilePicUrl
+            source: profilePicUrl ? ((0 === profilePicUrl.indexOf("http")) ? profilePicUrl : (defaultBaseUrl + profilePicUrl)) : defaultProfilePicUrl;
             mipmap: true;
             // Anchors
             anchors.fill: parent
