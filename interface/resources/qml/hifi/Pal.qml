@@ -31,8 +31,10 @@ Rectangle {
     property int myCardHeight: 82;
     property int rowHeight: 70;
     property int actionButtonWidth: 55;
+    property int locationColumnWidth: 125;
     property int myNameCardWidth: palContainer.width - (activeTab == "nearbyTab" ? 70 : upperRightInfoContainer.width);
-    property int nameCardWidth: nearbyTable.width - (iAmAdmin ? (actionButtonWidth * 4) : (actionButtonWidth * 2)) - 4 - hifi.dimensions.scrollbarBackgroundWidth;
+    property int nearbyNameCardWidth: nearbyTable.width - (iAmAdmin ? (actionButtonWidth * 4) : (actionButtonWidth * 2)) - 4 - hifi.dimensions.scrollbarBackgroundWidth;
+    property int connectionsNameCardWidth: connectionsTable.width - locationColumnWidth - actionButtonWidth - 4 - hifi.dimensions.scrollbarBackgroundWidth;
     property var myData: ({profileUrl: "../../icons/defaultNameCardUser.png", displayName: "", userName: "", audioLevel: 0.0, avgAudioLevel: 0.0, admin: true}); // valid dummy until set
     property var ignored: ({}); // Keep a local list of ignored avatars & their data. Necessary because HashMap is slow to respond after ignoring.
     property var nearbyUserModelData: []; // This simple list is essentially a mirror of the nearbyUserModel listModel without all the extra complexities.
@@ -41,6 +43,7 @@ Rectangle {
     property var activeTab: "nearbyTab";
     property int usernameVisibility;
     property bool currentlyEditingDisplayName: false
+    property string userTextColor: (connectionStatus == "connection" ? hifi.colors.indigoAccent : (connectionStatus == "friend" ? hifi.colors.greenHighlight : hifi.colors.darkGray))
 
     HifiConstants { id: hifi; }
 
@@ -383,7 +386,7 @@ Rectangle {
         // Anchors
         anchors {
             top: tabSelectorContainer.bottom;
-            topMargin: tabSelectorContainer.height;
+            topMargin: 12 + (iAmAdmin ? -adminTab.anchors.topMargin : 0);
             bottom: parent.bottom;
             bottomMargin: 12;
             horizontalCenter: parent.horizontalCenter;
@@ -430,9 +433,6 @@ Rectangle {
         // This TableView refers to the Nearby Table (on the "Nearby" tab below the current user's NameCard)
         HifiControls.Table {
             id: nearbyTable;
-            // Size
-            height: palContainer.height - myInfo.height - 8;
-            width: palContainer.width - 12;
             // Anchors
             anchors.fill: parent;
             // Properties
@@ -462,7 +462,7 @@ Rectangle {
                 id: displayNameHeader;
                 role: "displayName";
                 title: nearbyTable.rowCount + (nearbyTable.rowCount === 1 ? " NAME" : " NAMES");
-                width: nameCardWidth;
+                width: nearbyNameCardWidth;
                 movable: false;
                 resizable: false;
             }
@@ -524,8 +524,9 @@ Rectangle {
                     uuid: model ? model.sessionId : "";
                     selected: styleData.selected;
                     isAdmin: model && model.admin;
+                    isNearbyCard: true;
                     // Size
-                    width: nameCardWidth;
+                    width: nearbyNameCardWidth;
                     height: parent.height;
                     // Anchors
                     anchors.left: parent.left;
@@ -652,7 +653,7 @@ Rectangle {
             anchors.left: nearbyTable.left;
             anchors.top: nearbyTable.top;
             anchors.topMargin: 1;
-            anchors.leftMargin: actionButtonWidth + nameCardWidth/2 + displayNameHeaderMetrics.width/2 + 6;
+            anchors.leftMargin: actionButtonWidth + nearbyNameCardWidth/2 + displayNameHeaderMetrics.width/2 + 6;
             RalewayRegular {
                 id: helpText;
                 text: "[?]";
@@ -720,44 +721,57 @@ Rectangle {
         // Anchors
         anchors {
             top: tabSelectorContainer.bottom;
-            topMargin: tabSelectorContainer.height;
+            topMargin: 12;
             bottom: parent.bottom;
             bottomMargin: 12;
             horizontalCenter: parent.horizontalCenter;
         }
+        width: parent.width - 12;
         visible: activeTab == "connectionsTab";
 
         // This TableView refers to the Connections Table (on the "Connections" tab below the current user's NameCard)
         HifiControls.Table {
             id: connectionsTable;
-            // Size
-            height: palContainer.height - myInfo.height - 8;
-            width: palContainer.width - 12;
             // Anchors
             anchors.fill: parent;
             // Properties
             centerHeaderText: true;
             sortIndicatorVisible: true;
             headerVisible: true;
-            sortIndicatorColumn: settings.sortIndicatorColumn;
+            sortIndicatorColumn: settings.connectionsSortIndicatorColumn;
             sortIndicatorOrder: settings.connectionsSortIndicatorOrder;
             onSortIndicatorColumnChanged: {
                 settings.connectionsSortIndicatorColumn = sortIndicatorColumn;
-                sortModel();
+                sortConnectionsModel();
             }
             onSortIndicatorOrderChanged: {
                 settings.connectionsSortIndicatorOrder = sortIndicatorOrder;
-                sortModel();
+                sortConnectionsModel();
             }
 
             TableViewColumn {
                 id: connectionsUserNameHeader;
                 role: "userName";
                 title: connectionsTable.rowCount + (connectionsTable.rowCount === 1 ? " NAME" : " NAMES");
-                width: nameCardWidth;
+                width: connectionsNameCardWidth;
                 movable: false;
                 resizable: false;
             }
+            TableViewColumn {
+                role: "placeName";
+                title: "LOCATION";
+                width: locationColumnWidth;
+                movable: false;
+                resizable: false;
+            }
+            TableViewColumn {
+                role: "friends";
+                title: "FRIEND";
+                width: actionButtonWidth;
+                movable: false;
+                resizable: false;
+            }
+
             model: ListModel {
                 id: connectionsUserModel;
             }
@@ -765,7 +779,7 @@ Rectangle {
             // This Rectangle refers to each Row in the connectionsTable.
             rowDelegate: Rectangle {
                 // Size
-                height: styleData.selected ? rowHeight : rowHeight - 15;
+                height: rowHeight - 15;
                 color: styleData.selected
                     ? hifi.colors.orangeHighlight
                     : styleData.alternate ? hifi.colors.tableRowLightEven : hifi.colors.tableRowLightOdd;
@@ -775,21 +789,75 @@ Rectangle {
             itemDelegate: Item {
                 id: connectionsItemCell;
 
-                // This NameCard refers to the cell that contains an avatar's
-                // DisplayName and UserName
+                // This NameCard refers to the cell that contains a connection's UserName
                 NameCard {
                     id: connectionsNameCard;
                     // Properties
+                    visible: styleData.role === "userName";
                     profilePicUrl: model ? model.profileUrl : "../../icons/defaultNameCardUser.png";
-                    displayName: styleData.value;
-                    userName: model ? model.userName : "";
+                    displayName: model ? model.userName : "";
+                    userName: "";
                     connectionStatus : model ? model.connection : "";
                     selected: styleData.selected;
+                    isNearbyCard: false;
                     // Size
-                    width: nameCardWidth;
+                    width: connectionsNameCardWidth;
                     height: parent.height;
                     // Anchors
                     anchors.left: parent.left;
+                }
+
+                // LOCATION data
+                FiraSansSemiBold {
+                    id: connectionsLocationData
+                    // Properties
+                    visible: styleData.role === "placeName";
+                    text: model ? model.placeName : "";
+                    elide: Text.ElideRight;
+                    // Size
+                    width: parent.width;
+                    // Anchors
+                    anchors.fill: parent;
+                    // Text Size
+                    size: displayNameTextPixelSize
+                    // Text Positioning
+                    verticalAlignment: Text.AlignVCenter
+                    // Style
+                    color: userTextColor;
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton
+                        hoverEnabled: true
+                        onClicked: pal.sendToScript({method: 'goToUser', params: model.userName});
+                        onEntered: {
+                            connectionsLocationData.color = hifi.colors.blueHighlight;
+                        }
+                        onExited: {
+                            connectionsLocationData.color = userTextColor;
+                        }
+                    }
+                }
+
+                // "Friends" checkbox
+                HifiControls.CheckBox {
+                    id: friendsCheckBox;
+                    visible: styleData.role === "friends";
+                    anchors.centerIn: parent;
+                    checked: model ? (model["connection"] === "friend" ? true : false) : false;
+                    boxSize: 24;
+                    onClicked: {
+                        var newValue = !model[styleData.role];
+                        connectionsUserModel.setProperty(model.userIndex, styleData.role, newValue);
+                        connectionsUserModelData[model.userIndex][styleData.role] = newValue; // Defensive programming
+                        // Insert line here about actually taking the friend/unfriend action
+                        // Also insert line here about logging the activity, similar to the commented line below
+                        //UserActivityLogger["palAction"](newValue ? styleData.role : "un-" + styleData.role, model.sessionId);
+
+                        // http://doc.qt.io/qt-5/qtqml-syntax-propertybinding.html#creating-property-bindings-from-javascript
+                        // I'm using an explicit binding here because clicking a checkbox breaks the implicit binding as set by
+                        // "checked:" statement above.
+                        checked = Qt.binding(function() { return (model["connection"] === "friend" ? true : false)});
+                    }
                 }
             }
         }
@@ -806,7 +874,7 @@ Rectangle {
             anchors.left: connectionsTable.left;
             anchors.top: connectionsTable.top;
             anchors.topMargin: 1;
-            anchors.leftMargin: actionButtonWidth + nameCardWidth/2 + connectionsUserNameHeaderMetrics.width/2 + 6;
+            anchors.leftMargin: actionButtonWidth + connectionsNameCardWidth/2 + connectionsUserNameHeaderMetrics.width/2 + 6;
             RalewayRegular {
                 id: connectionsNamesHelpText;
                 text: "[?]";
@@ -895,13 +963,13 @@ Rectangle {
             sortModel();
             break;
         case 'connections':
-            console.log('GOT CONNECTIONS DATA:', JSON.stringify(message));
             var data = message.params;
             for (var connectionID in data) {
-                data[connectionID].profileUrl = "https://metaverse.highfidelity.com" + data[connectionID].profileUrl;
+                data[connectionID].profileUrl = prependBaseUrl(data[connectionID].profileUrl);
             }
             connectionsUserModelData = data;
             sortConnectionsModel();
+            console.log('DEBUGGING: ', JSON.stringify(connectionsUserModelData));
             break;
         case 'select':
             var sessionIds = message.params[0];
@@ -963,8 +1031,8 @@ Rectangle {
                     }
                     if (profileUrl !== undefined) {
                         // Set the profileURL appropriately
-                        nearbyUserModel.setProperty(userIndex, "profileUrl", "https://metaverse.highfidelity.com" + profileUrl);
-                        nearbyUserModelData[userIndex].profileUrl = "https://metaverse.highfidelity.com" + profileUrl; // Defensive programming
+                        nearbyUserModel.setProperty(userIndex, "profileUrl", prependBaseUrl(profileUrl));
+                        nearbyUserModelData[userIndex].profileUrl = prependBaseUrl(profileUrl); // Defensive programming
                     }
                 }
             } else {
@@ -1084,6 +1152,16 @@ Rectangle {
             userIds.push(nearbyUserModelData[userIndex].sessionId);
         });
         pal.sendToScript({method: 'selected', params: userIds});
+    }
+    function prependBaseUrl(urlToPrepend) {
+        var baseUrl = "https://metaverse.highfidelity.com";
+        var finalUrl = urlToPrepend;
+
+        if (finalUrl.indexOf(baseUrl) === -1) {
+            finalUrl = baseUrl + urlToPrepend;
+        }
+
+        return finalUrl;
     }
     Connections {
         target: nearbyTable.selection;
