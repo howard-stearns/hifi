@@ -176,7 +176,7 @@ Item {
             height: displayNameTextPixelSize + 4
             // Anchors
             anchors.top: parent.top
-            anchors.topMargin: 8
+            anchors.topMargin: 8 + (isNearbyCard ? 0 : 8);
             anchors.left: parent.left
             // DisplayName Text for others' cards
             FiraSansSemiBold {

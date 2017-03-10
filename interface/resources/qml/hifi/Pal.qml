@@ -31,7 +31,7 @@ Rectangle {
     property int myCardHeight: 82;
     property int rowHeight: 70;
     property int actionButtonWidth: 55;
-    property int locationColumnWidth: 125;
+    property int locationColumnWidth: 170;
     property int myNameCardWidth: palContainer.width - (activeTab == "nearbyTab" ? 70 : upperRightInfoContainer.width);
     property int nearbyNameCardWidth: nearbyTable.width - (iAmAdmin ? (actionButtonWidth * 4) : (actionButtonWidth * 2)) - 4 - hifi.dimensions.scrollbarBackgroundWidth;
     property int connectionsNameCardWidth: connectionsTable.width - locationColumnWidth - actionButtonWidth - 4 - hifi.dimensions.scrollbarBackgroundWidth;
@@ -43,7 +43,6 @@ Rectangle {
     property var activeTab: "nearbyTab";
     property int usernameVisibility;
     property bool currentlyEditingDisplayName: false
-    property string userTextColor: (connectionStatus == "connection" ? hifi.colors.indigoAccent : (connectionStatus == "friend" ? hifi.colors.greenHighlight : hifi.colors.darkGray))
 
     HifiConstants { id: hifi; }
 
@@ -267,6 +266,7 @@ Rectangle {
                     hoverEnabled: true;
                     onClicked: { activeTab = "connectionsTab";
                         pal.sendToScript({method: 'getVisibility'});
+                        connectionsLoading.visible = true;
                         pal.sendToScript({method: 'refreshConnections'}); }
                 }
 
@@ -287,7 +287,10 @@ Rectangle {
                             id: reloadConnections;
                             width: reloadConnections.height;
                             glyph: hifi.glyphs.reload;
-                            onClicked: pal.sendToScript({method: 'refreshConnections'});
+                            onClicked: {
+                                connectionsLoading.visible = true;
+                                pal.sendToScript({method: 'refreshConnections'});
+                            }
                         }
                     }
                     // "CONNECTIONS" text
@@ -671,7 +674,8 @@ Rectangle {
                 onClicked: letterbox(hifi.glyphs.question,
                                      "Display Names",
                                      "Bold names in the list are <b>avatar display names</b>.<br>" +
-                                     "Purple names are <b>connections</b>.<br>Green names are <b>friends</b>.<br>" +
+                                     "<font color='purple'>Purple names are <b>connections</b></font>.<br>" +
+                                     "<font color='green'>Green names are <b>friends</b>.</font><br>" +
                                      "<br>If someone's display name isn't set, a unique <b>session display name</b> is assigned to them.<br>" +
                                      "<br>Administrators of this domain can also see the <b>username</b> or <b>machine ID</b> associated with each avatar present.");
                 onEntered: helpText.color = hifi.colors.baseGrayHighlight;
@@ -728,10 +732,20 @@ Rectangle {
         }
         width: parent.width - 12;
         visible: activeTab == "connectionsTab";
+        
+        AnimatedImage {
+            id: connectionsLoading;
+            source: "../../icons/profilePicLoading.gif"
+            width: 120;
+            height: width;
+            anchors.centerIn: parent;
+            visible: true;
+        }
 
         // This TableView refers to the Connections Table (on the "Connections" tab below the current user's NameCard)
         HifiControls.Table {
             id: connectionsTable;
+            visible: !connectionsLoading.visible;
             // Anchors
             anchors.fill: parent;
             // Properties
@@ -819,11 +833,11 @@ Rectangle {
                     // Anchors
                     anchors.fill: parent;
                     // Text Size
-                    size: displayNameTextPixelSize
+                    size: 14;
                     // Text Positioning
                     verticalAlignment: Text.AlignVCenter
                     // Style
-                    color: userTextColor;
+                    color: hifi.colors.darkGray;
                     MouseArea {
                         anchors.fill: parent
                         acceptedButtons: Qt.LeftButton
@@ -833,7 +847,7 @@ Rectangle {
                             connectionsLocationData.color = hifi.colors.blueHighlight;
                         }
                         onExited: {
-                            connectionsLocationData.color = userTextColor;
+                            connectionsLocationData.color = hifi.colors.darkGray;
                         }
                     }
                 }
@@ -868,13 +882,14 @@ Rectangle {
 
         // This Rectangle refers to the [?] popup button next to "NAMES"
         Rectangle {
+            visible: !connectionsLoading.visible;
             color: hifi.colors.tableBackgroundLight;
             width: 20;
             height: hifi.dimensions.tableHeaderHeight - 2;
             anchors.left: connectionsTable.left;
             anchors.top: connectionsTable.top;
             anchors.topMargin: 1;
-            anchors.leftMargin: actionButtonWidth + connectionsNameCardWidth/2 + connectionsUserNameHeaderMetrics.width/2 + 6;
+            anchors.leftMargin: connectionsNameCardWidth/2 + connectionsUserNameHeaderMetrics.width/2 + 6;
             RalewayRegular {
                 id: connectionsNamesHelpText;
                 text: "[?]";
@@ -890,9 +905,9 @@ Rectangle {
                 acceptedButtons: Qt.LeftButton;
                 hoverEnabled: true;
                 onClicked: letterbox(hifi.glyphs.question,
-                                     "CONNECTION NAMES",
-                                     "This is <b>temporary text</b>.<br>" +
-                                     "It will <b>be replaced</b> eventually.");
+                                     "Connections",
+                                     "<font color='purple'>Purple names are <b>connections</b>.</font> When your visibility is set to Everyone, Connections can see your username and location.<br><br>"+
+                                     "<font color='green'>Green names are <b>friends</b>.</font> When your visibility is set to Friends, only Friends can see your username and location.");
                 onEntered: connectionsNamesHelpText.color = hifi.colors.baseGrayHighlight;
                 onExited: connectionsNamesHelpText.color = hifi.colors.darkGray;
             }
@@ -969,7 +984,7 @@ Rectangle {
             }
             connectionsUserModelData = data;
             sortConnectionsModel();
-            console.log('DEBUGGING: ', JSON.stringify(connectionsUserModelData));
+            connectionsLoading.visible = false;
             break;
         case 'select':
             var sessionIds = message.params[0];
@@ -1076,7 +1091,7 @@ Rectangle {
         }
     }
     function sortModel() {
-        var column = nearbyTable.getColumn(nearbyTable.nearbySortIndicatorColumn);
+        var column = nearbyTable.getColumn(nearbyTable.sortIndicatorColumn);
         var sortProperty = column ? column.role : "displayName";
         var before = (nearbyTable.sortIndicatorOrder === Qt.AscendingOrder) ? -1 : 1;
         var after = -1 * before;
@@ -1114,7 +1129,7 @@ Rectangle {
         }
     }
     function sortConnectionsModel() {
-        var column = connectionsTable.getColumn(connectionsTable.connectionsSortIndicatorColumn);
+        var column = connectionsTable.getColumn(connectionsTable.sortIndicatorColumn);
         var sortProperty = column ? column.role : "userName";
         var before = (connectionsTable.sortIndicatorOrder === Qt.AscendingOrder) ? -1 : 1;
         var after = -1 * before;
@@ -1157,7 +1172,7 @@ Rectangle {
         var baseUrl = "https://metaverse.highfidelity.com";
         var finalUrl = urlToPrepend;
 
-        if (finalUrl.indexOf(baseUrl) === -1) {
+        if (finalUrl.indexOf("https://hifi-metaverse") === -1) {
             finalUrl = baseUrl + urlToPrepend;
         }
 
