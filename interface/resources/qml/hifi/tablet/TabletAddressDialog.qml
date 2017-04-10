@@ -255,7 +255,7 @@ StackView {
                 TabletTextButton {
                     id: allTab;
                     text: "ALL";
-                    property string includeActions: 'snapshot, concurrency';
+                    property string includeActions: 'snapshot,concurrency';
                     selected: allTab === selectedTab;
                     action: tabSelect;
                 }
@@ -485,6 +485,7 @@ StackView {
             'page=' + pageNumber
         ];
         var url = metaverseBase + 'user_stories?' + options.join('&');
+        console.log('fixme get url', url);
         var thisRequestId = ++requestId;
         getRequest(url, function (error, data) {
             if ((thisRequestId !== requestId) || handleError(url, error, data, cb)) {
