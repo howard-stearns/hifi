@@ -439,7 +439,7 @@ void MyAvatar::update(float deltaTime) {
     }
     if (_physicsSafetyPending && qApp->isPhysicsEnabled() && _characterController.isEnabledAndReady()) { // fix only when needed and ready
         _physicsSafetyPending = false;
-        safeLanding(_goToPosition, _characterController.isStuck()); // no-op if already safe
+        safeLanding(_goToPosition, false/*_characterController.isStuck()*/); // no-op if already safe
     }
 
     Head* head = getHead();
@@ -1555,11 +1555,11 @@ void MyAvatar::harvestResultsFromPhysicsSimulation(float deltaTime) {
 
     if (_characterController.isEnabledAndReady()) {
         setVelocity(_characterController.getLinearVelocity() + _characterController.getFollowVelocity());
-        if (_characterController.isStuck()) {
+        /*if (_characterController.isStuck()) {
             _physicsSafetyPending = true;
             _goToPosition = getPosition();
             qDebug() << "FIXME setting safety test at:" << _goToPosition;
-        }
+        }*/
     } else {
         setVelocity(getVelocity() + _characterController.getFollowVelocity());
     }
@@ -2312,12 +2312,24 @@ bool MyAvatar::requiresSafeLanding(const glm::vec3& positionIn, glm::vec3& bette
         bool intersects = entityTree->findRayIntersection(startPointIn, directionIn, include, ignore, visibleOnly, collidableOnly, precisionPicking,
             element, distance, face, normalOut, (void**)&intersectedEntity, lockType, accurateResult);
         if (!intersects || !intersectedEntity) {
-             return false;
+            return false;
         }
         intersectionOut = startPointIn + (directionIn * distance);
         entityIdOut = intersectedEntity->getEntityItemID();
         return true;
     };
+
+    // FIXME DEBUG
+    auto debugID = [&](QString id) {
+        EntityItemID floorModel = QUuid(id);
+        include.clear();
+        include.push_back(floorModel);
+        if (findIntersection(capsuleCenter, up, upperIntersection, upperId, upperNormal)) qDebug() << "     FIXME model above:" << (isDown(upperNormal) ? "down " : "up ") << upperIntersection << "@" << upperId; else qDebug() << "     CAN'T FIND FLOOR ABOVE" << floorModel;
+        if (findIntersection(capsuleCenter, down, lowerIntersection, lowerId, lowerNormal)) qDebug() << "     FIXME model below:" << (isUp(lowerNormal) ? "up " : "down ") << lowerIntersection << "@" << lowerId; else qDebug() << "     CANT'T FIND FLOOR BELOW" << floorModel;
+    };
+    debugID(QString("{bb3a0297-0f8f-4853-99fe-58269f9d755e}"));
+    debugID(QString("{63fe47f3-c969-45f5-819d-cb72edd23834}"));
+    include.clear();
 
     // The Algorithm, in four parts:
 
@@ -2336,13 +2348,14 @@ bool MyAvatar::requiresSafeLanding(const glm::vec3& positionIn, glm::vec3& bette
         // Our head may be embedded, but our center is out and there's room below. See corresponding comment above.
         return ok("nothing below");
     }
- 
+
     // See if we have room between entities above and below, but that we are not contained.
     if (isDown(upperNormal) && isUp(lowerNormal)) {
         // The surface above us is the bottom of something, and the surface below us it the top of something.
         // I.e., we are in a clearing between two objects.
         auto delta = glm::distance(upperIntersection, lowerIntersection);
-        if (delta > (2 * halfHeight)) {
+        const float halfHeightFactor = 2.5f; // Until case 5003 is fixed (and maybe after?), we need a fudge factor. Also account for content modelers not being precise.
+        if (delta > (halfHeightFactor * halfHeight)) {
             // There is room for us to fit in that clearing. If there wasn't, physics would oscilate us between the objects above and below.
             // We're now going to iterate upwards through successive upperIntersections, testing to see if we're contained within the top surface of some entity.
             // There will be one of two outcomes:
@@ -2352,7 +2365,7 @@ bool MyAvatar::requiresSafeLanding(const glm::vec3& positionIn, glm::vec3& bette
                 ignore.push_back(upperId);
                 if (!findIntersection(upperIntersection, up, upperIntersection, upperId, upperNormal)) {
                     // We're not inside an entity, and from the nested tests, we have room between what is above and below. So position is good!
-                    //qDebug() << "FIXME upper:" << upperId << upperIntersection << " n:" << upperNormal.y << " lower:" << lowerId << lowerIntersection << " n:" << lowerNormal.y << " delta:" << delta << " halfHeight:" << halfHeight;
+                    qDebug() << "FIXME upper:" << upperId << upperIntersection << " n:" << upperNormal.y << " lower:" << lowerId << lowerIntersection << " n:" << lowerNormal.y << " delta:" << delta << " halfHeight:" << halfHeight;
                     return ok("enough room");
                 }
                 if (isUp(upperNormal)) {
