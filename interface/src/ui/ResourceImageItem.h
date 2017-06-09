@@ -12,14 +12,22 @@
 #ifndef hifi_ResourceImageItem_h
 #define hifi_ResourceImageItem_h
 
-// fixme: replace with QQuickFramebufferObject
+#include <QQuickFramebufferObject>
 #include <OffscreenQmlElement.h>
 
-class ResourceImageItem : public QQuickItem {
+class ResourceImageItem : public QQuickFramebufferObject {
     Q_OBJECT
     HIFI_QML_DECL
+    Q_PROPERTY(QUrl source READ getSource WRITE setSource NOTIFY sourceChanged)
 public:
     ResourceImageItem(QQuickItem* parent = nullptr);
+    Renderer *createRenderer() const;
+    QUrl getSource() const;
+    void setSource(const QUrl& url);
+signals:
+    void sourceChanged();
+private:
+    QUrl _source{};
 };
 
 #endif
