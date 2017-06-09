@@ -169,6 +169,7 @@
 #if defined(Q_OS_MAC) || defined(Q_OS_WIN)
 #include "SpeechRecognizer.h"
 #endif
+#include "ui/ResourceImageItem.h"
 #include "ui/AddressBarDialog.h"
 #include "ui/AvatarInputs.h"
 #include "ui/DialogsManager.h"
@@ -1959,6 +1960,7 @@ FrameTimingsScriptingInterface _frameTimingsScriptingInterface;
 extern void setupPreferences();
 
 void Application::initializeUi() {
+    ResourceImageItem::registerType();
     AddressBarDialog::registerType();
     ErrorDialog::registerType();
     LoginDialog::registerType();

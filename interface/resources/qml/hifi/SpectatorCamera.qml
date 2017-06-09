@@ -193,7 +193,8 @@ Rectangle {
         }
 
         // Spectator Camera Preview
-        Image {
+        //Image {
+        ResourceImageItem {
             id: spectatorCameraPreview;
             height: 250;
             anchors.left: parent.left;
@@ -203,7 +204,7 @@ Rectangle {
             fillMode: Image.PreserveAspectFit;
             horizontalAlignment: Image.AlignHCenter;
             verticalAlignment: Image.AlignVCenter;
-            source: "http://1.bp.blogspot.com/-1GABEq__054/T03B00j_OII/AAAAAAAAAa8/jo55LcvEPHI/s1600/Winning.jpg";
+            // source: "http://1.bp.blogspot.com/-1GABEq__054/T03B00j_OII/AAAAAAAAAa8/jo55LcvEPHI/s1600/Winning.jpg";
         }
         
         // "Monitor Shows" Switch Label Glyph
