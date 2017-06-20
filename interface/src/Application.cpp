@@ -935,6 +935,8 @@ Application::Application(int& argc, char** argv, QElapsedTimer& startupTimer, bo
 
     // add firstRun flag from settings to launch event
     Setting::Handle<bool> firstRun { Settings::firstRun, true };
+    qDebug() << "FIXME simulated event Application constructor slamming firstRun false from" << firstRun.get();
+    firstRun.set(false);
     properties["first_run"] = firstRun.get();
 
     // add the user's machine ID to the launch event
@@ -2477,7 +2479,10 @@ void Application::handleSandboxStatus(QNetworkReply* reply) {
     bool isUsingHMDAndHandControllers = hasHMD && hasHandControllers && isUsingHMD;
 
     Setting::Handle<bool> tutorialComplete{ "tutorialComplete", false };
+    qDebug() << "FIXME simulated event handleSandboxStatus reading tutorialComplete" << tutorialComplete.get();
+
     Setting::Handle<bool> firstRun{ Settings::firstRun, true };
+    qDebug() << "FIXME simulated event handleSandboxStatus reading firstRun" << firstRun.get();
 
     bool isTutorialComplete = tutorialComplete.get();
     bool shouldGoToTutorial = isUsingHMDAndHandControllers && hasTutorialContent && !isTutorialComplete;
@@ -2493,6 +2498,8 @@ void Application::handleSandboxStatus(QNetworkReply* reply) {
     if (urlIndex != -1) {
         addressLookupString = arguments().value(urlIndex + 1);
     }
+    qDebug() << "FIXME handleSandboxStatus slamming addressLookupString to zaru";
+    addressLookupString = "hifi://zaru";
 
     const QString TUTORIAL_PATH = "/tutorial_begin";
 
@@ -2568,6 +2575,7 @@ void Application::handleSandboxStatus(QNetworkReply* reply) {
     _connectionMonitor.init();
 
     // After all of the constructor is completed, then set firstRun to false.
+    qDebug() << "FIXME simulated event handleSandboxStatus setting firstRun false from" << firstRun.get();
     firstRun.set(false);
 }
 
@@ -3901,6 +3909,8 @@ void Application::loadSettings() {
         // If this is our first run, and no preferred devices were set, default to
         // an HMD device if available.
         Setting::Handle<bool> firstRun { Settings::firstRun, true };
+        qDebug() << "FIXME simulated event loadSettings slamming false from" << firstRun.get();
+        firstRun.set(false);
         if (firstRun.get()) {
             auto displayPlugins = pluginManager->getDisplayPlugins();
             for (auto& plugin : displayPlugins) {
