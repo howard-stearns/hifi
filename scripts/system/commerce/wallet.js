@@ -14,6 +14,7 @@
 /*global XXX */
 
 (function () { // BEGIN LOCAL_SCOPE
+    
     Script.include("/~/system/libraries/accountUtils.js");
 
     var MARKETPLACE_URL = "https://metaverse.highfidelity.com/marketplace";
