@@ -355,6 +355,35 @@ Item {
                     UserActivityLogger.commercePassphraseAuthenticationStatus("passphrase modal cancelled");
                 }
             }
+            RalewayRegular {
+                id: dateText;
+                text: "This wallet last changed:\n" + Commerce.keyFileModificationDate().toLocaleString();
+                horizontalAlignment: Text.AlignHCenter;
+                size: 16;
+                anchors.top: cancelPassphraseInputButton.bottom;
+                anchors.topMargin: 20;
+                anchors.horizontalCenter: helpButton.horizontalCenter;
+                color: hifi.colors.white;
+            }
+            // "Help" button
+            HifiControlsUit.Button {
+                id: helpButton;
+                color: hifi.buttons.noneBorderlessWhite;
+                colorScheme: hifi.colorSchemes.dark;
+                anchors.top: dateText.bottom;
+                anchors.topMargin: 20;
+                height: 40;
+                anchors.left: parent.left;
+                anchors.leftMargin: 16;
+                anchors.right: parent.right;
+                anchors.rightMargin: 16;
+                width: parent.width/2 - 4;
+                text: "Help"
+                onClicked: {
+                    root.parent.activeView = "help";  //FIXME
+                    //sendSignalToParent({method: 'passphrasePopup_cancelClicked'});
+                }
+            }
         }
     }
 
