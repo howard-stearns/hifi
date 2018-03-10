@@ -36,6 +36,7 @@ public:
     bool getSecurityImage();
     QString getKeyFilePath();
     bool copyKeyFileFrom(const QString& pathname);
+    QDateTime Wallet::keyFileModificationDate();
 
     void setSalt(const QByteArray& salt) { _salt = salt; }
     QByteArray getSalt() { return _salt; }

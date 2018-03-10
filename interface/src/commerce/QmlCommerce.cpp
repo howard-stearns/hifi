@@ -67,6 +67,11 @@ bool QmlCommerce::copyKeyFileFrom(const QString& pathname) {
     return wallet->copyKeyFileFrom(pathname);
 }
 
+QDateTime QmlCommerce::keyFileModificationDate() {
+    auto wallet = DependencyManager::get<Wallet>();
+    return wallet->keyFileModificationDate();
+}
+
 void QmlCommerce::getWalletAuthenticatedStatus() {
     auto wallet = DependencyManager::get<Wallet>();
     emit walletAuthenticatedStatusResult(wallet->walletIsAuthenticatedWithPassphrase());

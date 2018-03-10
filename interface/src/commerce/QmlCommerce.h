@@ -62,6 +62,7 @@ protected:
     Q_INVOKABLE void getSecurityImage();
     Q_INVOKABLE void getWalletAuthenticatedStatus();
     Q_INVOKABLE bool copyKeyFileFrom(const QString& pathname);
+    Q_INVOKABLE QDateTime keyFileModificationDate();
 
     Q_INVOKABLE void chooseSecurityImage(const QString& imageFile);
     Q_INVOKABLE void setPassphrase(const QString& passphrase);

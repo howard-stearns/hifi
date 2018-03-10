@@ -21,6 +21,7 @@
 #include <AccountManager.h>
 
 #include <QFile>
+#include <QFileInfo>
 #include <QCryptographicHash>
 #include <QQmlContext>
 #include <QBuffer>
@@ -55,6 +56,10 @@ void initialize() {
     }
 }
 
+QDateTime Wallet::keyFileModificationDate() {
+    QFileInfo info(getKeyFilePath());
+    return info.lastModified();
+}
 QString keyFilePath() {
     auto accountManager = DependencyManager::get<AccountManager>();
     return PathUtils::getAppDataFilePath(QString("%1.%2").arg(accountManager->getAccountInfo().getUsername(), KEY_FILE));
