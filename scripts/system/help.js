@@ -25,7 +25,27 @@
 	    if (HMD.tabletID) {
                 Entities.editEntity(HMD.tabletID, TABLET_DATA);
             }
-	    Menu.triggerOption('Help...');
-	}
+            Menu.triggerOption('Help...');
+            onHelpScreen = true;
+        }
+    }
+
+    function onScreenChanged(type, url) {
+        onHelpScreen = type === "Web" && (url.indexOf(HELP_URL) === 0);
+        button.editProperties({ isActive: onHelpScreen });
+    }
+
+    button.clicked.connect(onClicked);
+    tablet.screenChanged.connect(onScreenChanged);
+
+    Script.scriptEnding.connect(function () {
+        if (onHelpScreen) {
+            tablet.gotoHomeScreen();
+        }
+        button.clicked.disconnect(onClicked);
+        tablet.screenChanged.disconnect(onScreenChanged);
+        if (tablet) {
+            tablet.removeButton(button);
+        }
     });
 }()); // END LOCAL_SCOPE
