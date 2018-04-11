@@ -14,7 +14,8 @@
 //
 
 (function () { // BEGIN LOCAL_SCOPE
-
+    var AppUi = Script.require('appUi');
+    var ui;
     var request = Script.require('request').request;
     var DEBUG = false;
     function debug() {
@@ -24,23 +25,6 @@
         print('tablet-goto.js:', [].map.call(arguments, JSON.stringify));
     }
 
-    var gotoQmlSource = "hifi/tablet/TabletAddressDialog.qml";
-    var buttonName = "GOTO";
-    var onGotoScreen = false;
-    var shouldActivateButton = false;
-    function ignore() { }
-
-    var tablet = Tablet.getTablet("com.highfidelity.interface.tablet.system");
-    var NORMAL_ICON    = "icons/tablet-icons/goto-i.svg";
-    var NORMAL_ACTIVE  = "icons/tablet-icons/goto-a.svg";
-    var WAITING_ICON   = "icons/tablet-icons/goto-msg.svg";
-    var button = tablet.addButton({
-        icon: NORMAL_ICON,
-        activeIcon: NORMAL_ACTIVE,
-        text: buttonName,
-        sortOrder: 8
-    });
-    
     function fromQml(message) {
         console.debug('tablet-goto::fromQml: message = ', JSON.stringify(message));
 
@@ -51,66 +35,14 @@
                 debug('rpc', request, 'error:', error, 'data:', data);
                 response.error = error;
                 response.result = data;
-                tablet.sendToQml(response);
+                ui.tablet.sendToQml(response);
             });
             return;
         default:
             response.error = {message: 'Unrecognized message', data: message};
         }
-        tablet.sendToQml(response);
+        ui.tablet.sendToQml(response);
     }
-    function messagesWaiting(isWaiting) {
-        button.editProperties({
-            icon: isWaiting ? WAITING_ICON : NORMAL_ICON
-            // No need for a different activeIcon, because we issue messagesWaiting(false) when the button goes active anyway.
-        });
-    }
-
-    var hasEventBridge = false;
-    function wireEventBridge(on) {
-        if (on) {
-            if (!hasEventBridge) {
-                tablet.fromQml.connect(fromQml);
-                hasEventBridge = true;
-            }
-        } else {
-            if (hasEventBridge) {
-                tablet.fromQml.disconnect(fromQml);
-                hasEventBridge = false;
-            }
-        }
-    }
-
-    function onClicked() {
-        if (onGotoScreen) {
-            // for toolbar-mode: go back to home screen, this will close the window.
-            tablet.gotoHomeScreen();
-        } else {
-            shouldActivateButton = true;
-            tablet.loadQMLSource(gotoQmlSource);
-            onGotoScreen = true;
-        }
-    }
-
-    function onScreenChanged(type, url) {
-        ignore(type);
-        if (url === gotoQmlSource) {
-            onGotoScreen = true;
-            shouldActivateButton = true;
-            button.editProperties({isActive: shouldActivateButton});
-            wireEventBridge(true);
-            messagesWaiting(false);
-            tablet.sendToQml({ method: 'refreshFeeds', protocolSignature: Window.protocolSignature() })
-
-        } else {
-            shouldActivateButton = false;
-            onGotoScreen = false;
-            button.editProperties({isActive: shouldActivateButton});
-            wireEventBridge(false);
-        }
-    }
-    button.clicked.connect(onClicked);
-    tablet.screenChanged.connect(onScreenChanged);
 
     var stories = {}, pingPong = false;
     function expire(id) {
@@ -175,13 +107,13 @@
                 }
             }
             if (didNotify) {
-                messagesWaiting(true);
+                ui.messagesWaiting(true);
                 if (HMD.isHandControllerAvailable()) {
                     var STRENGTH = 1.0, DURATION_MS = 60, HAND = 2; // both hands
                     Controller.triggerHapticPulse(STRENGTH, DURATION_MS, HAND);
                 }
             } else if (!Object.keys(stories).length) { // If there's nothing being tracked, then any messageWaiting has expired.
-                messagesWaiting(false);
+                ui.messagesWaiting(false);
             }
         });
     }
@@ -190,9 +122,18 @@
 
     Script.scriptEnding.connect(function () {
         Script.clearInterval(pollTimer);
-        button.clicked.disconnect(onClicked);
-        tablet.removeButton(button);
-        tablet.screenChanged.disconnect(onScreenChanged);
     });
 
+    ui = new AppUi({
+	buttonName: "GOTO",
+	normalMessagesButton: "goto-msg.svg",
+	activeMessagesButton: "goto-a.svg",
+	sortOrder: 8,
+	home: "hifi/tablet/TabletAddressDialog.qml",
+	onMessage: fromQml,
+	onOpened: function () {
+	    ui.messagesWaiting(false);
+	    ui.tablet.sendToQml({ method: 'refreshFeeds', protocolSignature: Window.protocolSignature() });
+	}
+    });
 }()); // END LOCAL_SCOPE

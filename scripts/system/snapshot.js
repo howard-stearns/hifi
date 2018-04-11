@@ -12,24 +12,15 @@
 
 (function () { // BEGIN LOCAL_SCOPE
 Script.include("/~/system/libraries/accountUtils.js");
-
+var AppUi = Script.require('appUi');
 var SNAPSHOT_DELAY = 500; // 500ms
 var FINISH_SOUND_DELAY = 350;
 var resetOverlays;
 var reticleVisible;
 var clearOverlayWhenMoving;
 
-var buttonName = "SNAP";
-var buttonConnected = false;
-
-var tablet = Tablet.getTablet("com.highfidelity.interface.tablet.system");
-var button = tablet.addButton({
-    icon: "icons/tablet-icons/snap-i.svg",
-    activeIcon: "icons/tablet-icons/snap-a.svg",
-    text: buttonName,
-    sortOrder: 5
-});
-
+var buttonConnected = false; // because we disconnect when waiting
+var ui, tablet, button;
 var snapshotOptions = {};
 var imageData = [];
 var storyIDsToMaybeDelete = [];
@@ -361,19 +352,6 @@ function fillImageDataFromPrevious() {
     }
 }
 
-var SNAPSHOT_REVIEW_URL = Script.resolvePath("html/SnapshotReview.html");
-var isInSnapshotReview = false;
-function onButtonClicked() {
-    if (isInSnapshotReview){
-        // for toolbar-mode: go back to home screen, this will close the window.
-        tablet.gotoHomeScreen();
-    } else {
-        fillImageDataFromPrevious();
-        tablet.gotoWebScreen(SNAPSHOT_REVIEW_URL);
-        HMD.openTablet();
-    }
-}
-
 function snapshotUploaded(isError, reply) {
     if (!isError) {
         var replyJson = JSON.parse(reply),
@@ -466,7 +444,7 @@ function takeSnapshot() {
         Window.stillSnapshotTaken.connect(stillSnapshotTaken);
     }
     if (buttonConnected) {
-        button.clicked.disconnect(onButtonClicked);
+        button.clicked.disconnect(ui.onClicked);
         buttonConnected = false;
     }
 
@@ -533,7 +511,7 @@ function stillSnapshotTaken(pathStillSnapshot, notify) {
     }
     Window.stillSnapshotTaken.disconnect(stillSnapshotTaken);
     if (!buttonConnected) {
-        button.clicked.connect(onButtonClicked);
+        button.clicked.connect(ui.onClicked);
         buttonConnected = true;
     }
 
@@ -616,7 +594,7 @@ function processingGifCompleted(pathAnimatedSnapshot) {
     isLoggedIn = Account.isLoggedIn();
     Window.processingGifCompleted.disconnect(processingGifCompleted);
     if (!buttonConnected) {
-        button.clicked.connect(onButtonClicked);
+        button.clicked.connect(ui.onClicked);
         buttonConnected = true;
     }
 
@@ -654,18 +632,6 @@ function maybeDeleteSnapshotStories() {
         })
     });
     storyIDsToMaybeDelete = [];
-}
-function onTabletScreenChanged(type, url) {
-    var wasInSnapshotReview = isInSnapshotReview; 
-    isInSnapshotReview = (type === "Web" && url === SNAPSHOT_REVIEW_URL);
-    button.editProperties({ isActive: isInSnapshotReview });
-    if (isInSnapshotReview !== wasInSnapshotReview) {
-        if (isInSnapshotReview) {
-            tablet.webEventReceived.connect(onMessage);
-        } else {
-            tablet.webEventReceived.disconnect(onMessage);
-        }
-    }
 }
 function onUsernameChanged() {
     fillImageDataFromPrevious();
@@ -739,11 +705,18 @@ function processRezPermissionChange(canRez) {
     }));
 }
 
-button.clicked.connect(onButtonClicked);
+ui = new AppUi({
+    buttonName: "SNAP",
+    home: Script.resolvePath("html/SnapshotReview.html"),
+    onMessage: onMessage,
+    onOpened: fillImageDataFromPrevious,
+    sortOrder: 5
+});
+button = ui.button;
+tablet = ui.tablet;
 buttonConnected = true;
 
 Window.snapshotShared.connect(snapshotUploaded);
-tablet.screenChanged.connect(onTabletScreenChanged);
 GlobalServices.myUsernameChanged.connect(onUsernameChanged);
 Snapshot.snapshotLocationSet.connect(snapshotLocationSet);
 
@@ -751,14 +724,6 @@ Entities.canRezChanged.connect(updatePrintPermissions);
 Entities.canRezTmpChanged.connect(updatePrintPermissions);
 
 Script.scriptEnding.connect(function () {
-    if (buttonConnected) {
-        button.clicked.disconnect(onButtonClicked);
-        buttonConnected = false;
-    }
-    if (tablet) {
-        tablet.removeButton(button);
-        tablet.screenChanged.disconnect(onTabletScreenChanged);
-    }
     Window.snapshotShared.disconnect(snapshotUploaded);
     Snapshot.snapshotLocationSet.disconnect(snapshotLocationSet);
     Entities.canRezChanged.disconnect(updatePrintPermissions);

@@ -17,7 +17,7 @@
     var request = Script.require('request').request;
 
 var populateNearbyUserList, color, textures, removeOverlays,
-    controllerComputePickRay, onTabletButtonClicked, onTabletScreenChanged,
+    controllerComputePickRay,
     receiveMessage, avatarDisconnected, clearLocalQMLDataAndClosePAL,
     createAudioInterval, tablet, CHANNEL, getConnectionData, findableByChanged,
     avatarAdded, avatarRemoved, avatarSessionChanged; // forward references;
@@ -40,8 +40,8 @@ var HOVER_TEXTURES = {
 var UNSELECTED_COLOR = { red: 0x1F, green: 0xC6, blue: 0xA6};
 var SELECTED_COLOR = {red: 0xF3, green: 0x91, blue: 0x29};
 var HOVER_COLOR = {red: 0xD0, green: 0xD0, blue: 0xD0}; // almost white for now
-var PAL_QML_SOURCE = "hifi/Pal.qml";
 var conserveResources = true;
+var AppUi = Script.require('appUi');
 
 Script.include("/~/system/libraries/controllers.js");
 
@@ -671,32 +671,6 @@ triggerPressMapping.from(Controller.Standard.LT).peek().to(makePressHandler(Cont
 //
 // Manage the connection between the button and the window.
 //
-var button;
-var buttonName = "PEOPLE";
-var tablet = null;
-
-function startup() {
-    tablet = Tablet.getTablet("com.highfidelity.interface.tablet.system");
-    button = tablet.addButton({
-        text: buttonName,
-        icon: "icons/tablet-icons/people-i.svg",
-        activeIcon: "icons/tablet-icons/people-a.svg",
-        sortOrder: 7
-    });
-    button.clicked.connect(onTabletButtonClicked);
-    tablet.screenChanged.connect(onTabletScreenChanged);
-    Window.domainChanged.connect(clearLocalQMLDataAndClosePAL);
-    Window.domainConnectionRefused.connect(clearLocalQMLDataAndClosePAL);
-    Messages.subscribe(CHANNEL);
-    Messages.messageReceived.connect(receiveMessage);
-    Users.avatarDisconnected.connect(avatarDisconnected);
-    AvatarList.avatarAddedEvent.connect(avatarAdded);
-    AvatarList.avatarRemovedEvent.connect(avatarRemoved);
-    AvatarList.avatarSessionChangedEvent.connect(avatarSessionChanged);
-}
-
-startup();
-
 var isWired = false;
 var audioTimer;
 var AUDIO_LEVEL_UPDATE_INTERVAL_MS = 100; // 10hz for now (change this and change the AVERAGING_RATIO too)
@@ -720,60 +694,45 @@ function off() {
     Users.requestsDomainListData = false;
 }
 
+function startup() {
+    ui = new AppUi({
+        buttonName: "PEOPLE",
+        sortOrder: 7,
+	home: "hifi/Pal.qml",
+	onOpened: function () {
+            ContextOverlay.enabled = false;
+            tablet.tabletShownChanged.connect(tabletVisibilityChanged);
+            Users.requestsDomainListData = true;
+            populateNearbyUserList();
+            isWired = true;
+            Script.update.connect(updateOverlays);
+            Controller.mousePressEvent.connect(handleMouseEvent);
+            Controller.mouseMoveEvent.connect(handleMouseMoveEvent);
+            Users.usernameFromIDReply.connect(usernameFromIDReply);
+            triggerMapping.enable();
+            triggerPressMapping.enable();
+            audioTimer = createAudioInterval(conserveResources ? AUDIO_LEVEL_CONSERVED_UPDATE_INTERVAL_MS : AUDIO_LEVEL_UPDATE_INTERVAL_MS);
+	},
+	onClosed: off,
+	onMessage: fromQml
+    });
+    tablet = ui.tablet;
+    Window.domainChanged.connect(clearLocalQMLDataAndClosePAL);
+    Window.domainConnectionRefused.connect(clearLocalQMLDataAndClosePAL);
+    Messages.subscribe(CHANNEL);
+    Messages.messageReceived.connect(receiveMessage);
+    Users.avatarDisconnected.connect(avatarDisconnected);
+    AvatarList.avatarAddedEvent.connect(avatarAdded);
+    AvatarList.avatarRemovedEvent.connect(avatarRemoved);
+    AvatarList.avatarSessionChangedEvent.connect(avatarSessionChanged);
+}
+
+startup();
+
 function tabletVisibilityChanged() {
     if (!tablet.tabletShown) {
         ContextOverlay.enabled = true;
         tablet.gotoHomeScreen();
-    }
-}
-
-var onPalScreen = false;
-
-function onTabletButtonClicked() {
-    if (onPalScreen) {
-        // for toolbar-mode: go back to home screen, this will close the window.
-        tablet.gotoHomeScreen();
-        ContextOverlay.enabled = true;
-    } else {
-        ContextOverlay.enabled = false;
-        tablet.loadQMLSource(PAL_QML_SOURCE);
-        tablet.tabletShownChanged.connect(tabletVisibilityChanged);
-        Users.requestsDomainListData = true;
-        populateNearbyUserList();
-        isWired = true;
-        Script.update.connect(updateOverlays);
-        Controller.mousePressEvent.connect(handleMouseEvent);
-        Controller.mouseMoveEvent.connect(handleMouseMoveEvent);
-        Users.usernameFromIDReply.connect(usernameFromIDReply);
-        triggerMapping.enable();
-        triggerPressMapping.enable();
-        audioTimer = createAudioInterval(conserveResources ? AUDIO_LEVEL_CONSERVED_UPDATE_INTERVAL_MS : AUDIO_LEVEL_UPDATE_INTERVAL_MS);
-    }
-}
-var hasEventBridge = false;
-function wireEventBridge(on) {
-    if (on) {
-        if (!hasEventBridge) {
-            tablet.fromQml.connect(fromQml);
-            hasEventBridge = true;
-        }
-    } else {
-        if (hasEventBridge) {
-            tablet.fromQml.disconnect(fromQml);
-            hasEventBridge = false;
-        }
-    }
-}
-
-function onTabletScreenChanged(type, url) {
-    onPalScreen = (type === "QML" && url === PAL_QML_SOURCE);
-    wireEventBridge(onPalScreen);
-    // for toolbar mode: change button to active when window is first openend, false otherwise.
-    button.editProperties({isActive: onPalScreen});
-
-    // disable sphere overlays when not on pal screen.
-    if (!onPalScreen) {
-        off();
     }
 }
 
@@ -866,7 +825,7 @@ function avatarDisconnected(nodeID) {
 
 function clearLocalQMLDataAndClosePAL() {
     sendToQml({ method: 'clearLocalQMLData' });
-    if (onPalScreen) {
+    if (ui.isOpen) {
         ContextOverlay.enabled = true;
         tablet.gotoHomeScreen();
     }
@@ -885,12 +844,6 @@ function avatarSessionChanged(avatarID) {
 }
 
 function shutdown() {
-    if (onPalScreen) {
-        tablet.gotoHomeScreen();
-    }
-    button.clicked.disconnect(onTabletButtonClicked);
-    tablet.removeButton(button);
-    tablet.screenChanged.disconnect(onTabletScreenChanged);
     Window.domainChanged.disconnect(clearLocalQMLDataAndClosePAL);
     Window.domainConnectionRefused.disconnect(clearLocalQMLDataAndClosePAL);
     Messages.subscribe(CHANNEL);

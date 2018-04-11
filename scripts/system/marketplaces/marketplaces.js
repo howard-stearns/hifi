@@ -19,7 +19,7 @@ var selectionDisplay = null; // for gridTool.js to ignore
 
     Script.include("/~/system/libraries/WebTablet.js");
     Script.include("/~/system/libraries/gridTool.js");
-
+    var AppUi = Script.require('appUi');
     var METAVERSE_SERVER_URL = Account.metaverseServerURL;
     var MARKETPLACE_URL = METAVERSE_SERVER_URL + "/marketplace";
     var MARKETPLACE_URL_INITIAL = MARKETPLACE_URL + "?";  // Append "?" to signal injected script that it's the initial page.
@@ -73,6 +73,7 @@ var selectionDisplay = null; // for gridTool.js to ignore
             UserActivityLogger.openedMarketplace();
             tablet.gotoWebScreen(MARKETPLACE_URL_INITIAL, MARKETPLACES_INJECT_SCRIPT_URL);
         } else {
+	    // FIXME how do we do this?
             tablet.pushOntoStack(MARKETPLACE_CHECKOUT_QML_PATH);
             tablet.sendToQml({
                 method: 'updateCheckoutQML', params: {
@@ -86,41 +87,25 @@ var selectionDisplay = null; // for gridTool.js to ignore
         }
     }
 
-    var tablet = Tablet.getTablet("com.highfidelity.interface.tablet.system");
-    var NORMAL_ICON = "icons/tablet-icons/market-i.svg";
-    var NORMAL_ACTIVE = "icons/tablet-icons/market-a.svg";
-    var WAITING_ICON = "icons/tablet-icons/market-i-msg.svg";
-    var WAITING_ACTIVE = "icons/tablet-icons/market-a-msg.svg";
-    var marketplaceButton = tablet.addButton({
-        icon: NORMAL_ICON,
-        activeIcon: NORMAL_ACTIVE,
-        text: "MARKET",
-        sortOrder: 9
-    });
-
-    function messagesWaiting(isWaiting) {
-        marketplaceButton.editProperties({
-            icon: (isWaiting ? WAITING_ICON : NORMAL_ICON),
-            activeIcon: (isWaiting ? WAITING_ACTIVE : NORMAL_ACTIVE)
-        });
-    }
-
-    function onCanWriteAssetsChanged() {
-        var message = CAN_WRITE_ASSETS + " " + Entities.canWriteAssets();
-        tablet.emitScriptEvent(message);
-    }
-
-    function onClick() {
-        if (onMarketplaceScreen || onCommerceScreen) {
-            // for toolbar-mode: go back to home screen, this will close the window.
-            tablet.gotoHomeScreen();
-        } else {
+    var ui = new AppUi({
+	buttonName: "MARKET",
+	sortOrder: 9,
+	home: MARKETPLACE_URL_INITIAL,
+	inject: MARKETPLACES_INJECT_SCRIPT_URL,
+	onOpen: function () {
             Wallet.refreshWalletStatus();
             if (HMD.tabletID) {
                 Entities.editEntity(HMD.tabletID, { textures: JSON.stringify({ "tex.close": HOME_BUTTON_TEXTURE }) });
             }
-            showMarketplace();
-        }
+	    UserActivityLogger.openedMarketplace();
+	}
+    });
+    var tablet = ui.tablet;
+    var marketplaceButton = ui.button;
+
+    function onCanWriteAssetsChanged() {
+        var message = CAN_WRITE_ASSETS + " " + Entities.canWriteAssets();
+        tablet.emitScriptEvent(message);
     }
 
     var referrerURL; // Used for updating Purchases QML
@@ -415,7 +400,6 @@ var selectionDisplay = null; // for gridTool.js to ignore
         }
     }
 
-    marketplaceButton.clicked.connect(onClick);
     tablet.screenChanged.connect(onScreenChanged);
     Entities.canWriteAssetsChanged.connect(onCanWriteAssetsChanged);
     ContextOverlay.contextOverlayClicked.connect(setCertificateInfo);
@@ -490,10 +474,6 @@ var selectionDisplay = null; // for gridTool.js to ignore
     tablet.webEventReceived.connect(onMessage);
 
     Script.scriptEnding.connect(function () {
-        if (onMarketplaceScreen || onCommerceScreen) {
-            tablet.gotoHomeScreen();
-        }
-        tablet.removeButton(marketplaceButton);
         tablet.screenChanged.disconnect(onScreenChanged);
         ContextOverlay.contextOverlayClicked.disconnect(setCertificateInfo);
         tablet.webEventReceived.disconnect(onMessage);
@@ -657,7 +637,7 @@ var selectionDisplay = null; // for gridTool.js to ignore
             case 'wallet_availableUpdatesReceived':
             case 'purchases_availableUpdatesReceived':
                 userHasUpdates = message.numUpdates > 0;
-                messagesWaiting(userHasUpdates);
+                ui.messagesWaiting(userHasUpdates);
                 break;
             default:
                 print('Unrecognized message from Checkout.qml or Purchases.qml: ' + JSON.stringify(message));
