@@ -668,31 +668,6 @@ triggerMapping.from(Controller.Standard.RTClick).peek().to(makeClickHandler(Cont
 triggerMapping.from(Controller.Standard.LTClick).peek().to(makeClickHandler(Controller.Standard.LeftHand));
 triggerPressMapping.from(Controller.Standard.RT).peek().to(makePressHandler(Controller.Standard.RightHand));
 triggerPressMapping.from(Controller.Standard.LT).peek().to(makePressHandler(Controller.Standard.LeftHand));
-//
-// Manage the connection between the button and the window.
-//
-var isWired = false;
-var audioTimer;
-var AUDIO_LEVEL_UPDATE_INTERVAL_MS = 100; // 10hz for now (change this and change the AVERAGING_RATIO too)
-var AUDIO_LEVEL_CONSERVED_UPDATE_INTERVAL_MS = 300;
-function off() {
-    if (isWired) { // It is not ok to disconnect these twice, hence guard.
-        Script.update.disconnect(updateOverlays);
-        Controller.mousePressEvent.disconnect(handleMouseEvent);
-        Controller.mouseMoveEvent.disconnect(handleMouseMoveEvent);
-        tablet.tabletShownChanged.disconnect(tabletVisibilityChanged);
-        Users.usernameFromIDReply.disconnect(usernameFromIDReply);
-        isWired = false;
-        ContextOverlay.enabled = true
-    }
-    if (audioTimer) {
-        Script.clearInterval(audioTimer);
-    }
-    triggerMapping.disable(); // It's ok if we disable twice.
-    triggerPressMapping.disable(); // see above
-    removeOverlays();
-    Users.requestsDomainListData = false;
-}
 
 function startup() {
     ui = new AppUi({
@@ -843,6 +818,58 @@ function avatarSessionChanged(avatarID) {
     sendToQml({ method: 'palIsStale', params: [avatarID, 'avatarSessionChanged'] });
 }
 
+
+var button;
+var buttonName = "PEOPLE";
+var tablet = null;
+function startup() {
+    tablet = Tablet.getTablet("com.highfidelity.interface.tablet.system");
+    button = tablet.addButton({
+        text: buttonName,
+        icon: "icons/tablet-icons/people-i.svg",
+        activeIcon: "icons/tablet-icons/people-a.svg",
+        sortOrder: 7
+    });
+    button.clicked.connect(onTabletButtonClicked);
+    tablet.screenChanged.connect(onTabletScreenChanged);
+    Window.domainChanged.connect(clearLocalQMLDataAndClosePAL);
+    Window.domainConnectionRefused.connect(clearLocalQMLDataAndClosePAL);
+    Messages.subscribe(CHANNEL);
+    Messages.messageReceived.connect(receiveMessage);
+    Users.avatarDisconnected.connect(avatarDisconnected);
+    AvatarList.avatarAddedEvent.connect(avatarAdded);
+    AvatarList.avatarRemovedEvent.connect(avatarRemoved);
+    AvatarList.avatarSessionChangedEvent.connect(avatarSessionChanged);
+}
+startup();
+
+
+var isWired = false;
+var audioTimer;
+var AUDIO_LEVEL_UPDATE_INTERVAL_MS = 100; // 10hz for now (change this and change the AVERAGING_RATIO too)
+var AUDIO_LEVEL_CONSERVED_UPDATE_INTERVAL_MS = 300;
+function off() {
+    if (isWired) {
+        Script.update.disconnect(updateOverlays);
+        Controller.mousePressEvent.disconnect(handleMouseEvent);
+        Controller.mouseMoveEvent.disconnect(handleMouseMoveEvent);
+        tablet.tabletShownChanged.disconnect(tabletVisibilityChanged);
+        Users.usernameFromIDReply.disconnect(usernameFromIDReply);
+        ContextOverlay.enabled = true
+        triggerMapping.disable();
+        triggerPressMapping.disable();
+        Users.requestsDomainListData = false;
+
+        isWired = false;
+
+        if (audioTimer) {
+            Script.clearInterval(audioTimer);
+        }
+    }
+
+    removeOverlays();
+}
+
 function shutdown() {
     Window.domainChanged.disconnect(clearLocalQMLDataAndClosePAL);
     Window.domainConnectionRefused.disconnect(clearLocalQMLDataAndClosePAL);
@@ -854,10 +881,6 @@ function shutdown() {
     AvatarList.avatarSessionChangedEvent.disconnect(avatarSessionChanged);
     off();
 }
-
-//
-// Cleanup.
-//
 Script.scriptEnding.connect(shutdown);
 
 }()); // END LOCAL_SCOPE
