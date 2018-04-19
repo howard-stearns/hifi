@@ -28,7 +28,7 @@
             Menu.triggerOption('Help...');
             onHelpScreen = true;
         }
-    }
+    });
 
     function onScreenChanged(type, url) {
         onHelpScreen = type === "Web" && (url.indexOf(HELP_URL) === 0);
