@@ -94,8 +94,15 @@ bool WebEntityRenderer::needsRenderUpdateFromTypedEntity(const TypedEntityPointe
         withReadLock([&] {
             webSurface = _webSurface;
         });
-        if (webSurface && uvec2(getWindowSize(entity)) != toGlm(webSurface->size())) {
-            return true;
+        if (webSurface) {
+            // Pick up any change in the item's url, here while we have the entity so we can update it.
+            auto newUrl = _webSurface->getRootItem()->property(URL_PROPERTY).toString();
+            if (entity->getSourceUrl() != newUrl) {
+                entity->setSourceUrl(newUrl);
+            }
+            if (uvec2(getWindowSize(entity)) != toGlm(webSurface->size())) {
+                return true;
+            }
         }
     }
 
