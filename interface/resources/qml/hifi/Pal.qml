@@ -472,7 +472,7 @@ Rectangle {
                     visible: !isCheckBox && !isButton && !isAvgAudio;
                     uuid: model ? model.sessionId : "";
                     selected: styleData.selected;
-                    isReplicated: model.isReplicated;
+                    isReplicated: model && model.isReplicated;
                     isAdmin: model && model.admin;
                     isPresent: model && model.isPresent;
                     // Size
