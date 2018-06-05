@@ -98,8 +98,15 @@ bool WebEntityRenderer::needsRenderUpdateFromTypedEntity(const TypedEntityPointe
             // Pick up any change in the item's url, here while we have the entity so we can update it.
             auto newUrl = _webSurface->getRootItem()->property(URL_PROPERTY).toString();
             if (entity->getSourceUrl() != newUrl) {
-                entity->setSourceUrl(newUrl);
-            }
+                // Change the property, not the slot, so that everyone sees the change.
+                // I don't understand why the below is necessary. Why doesn't the server see it when we just do:
+                // entity->setSourceUrl(newUrl);
+                // entity->update(usecTimestampNow());
+                auto properties = entity->getProperties(PROP_SOURCE_URL);
+                properties.setSourceUrl(newUrl);
+                properties.setSourceUrlChanged(true);
+                DependencyManager::get<EntityScriptingInterface>()->editEntity(entity->getEntityItemID(), properties);
+             }
             if (uvec2(getWindowSize(entity)) != toGlm(webSurface->size())) {
                 return true;
             }
