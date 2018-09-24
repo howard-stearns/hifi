@@ -474,9 +474,6 @@ function fromQml(message) {
             Window.location = "hifi://BankOfHighFidelity";
         }
         break;
-    case 'wallet_availableUpdatesReceived':
-        // NOP
-        break;
     case 'http.request':
         // Handled elsewhere, don't log.
         break;
@@ -491,15 +488,95 @@ function walletOpened() {
     Controller.mouseMoveEvent.connect(handleMouseMoveEvent);
     triggerMapping.enable();
     triggerPressMapping.enable();
+    ui.messagesWaiting(false);
 }
 
 function walletClosed() {
     off();
 }
 
-//
-// Manage the connection between the button and the window.
-//
+function notificationDataProcessPage(data) {
+    return data.data.history;
+}
+
+var shouldShowDot = false;
+function notificationPollCallback(historyArray) {
+    var i;
+    var someoneElsePurchasedArray = [];
+    var proofIssuedArray = [];
+    var moneyReceivedArray = [];
+    var giftReceivedArray = [];
+    for (i = 0; i < historyArray.length; i++) {
+        var currentHistoryTxn = historyArray[i];
+
+        if (currentHistoryTxn.sent_certs <= 0 &&
+            currentHistoryTxn.received_certs <= 0) {
+            // This is an HFC transfer.
+            if (currentHistoryTxn.received_money > 0) {
+                if (currentHistoryTxn.sender_name === "marketplace") {
+                    someoneElsePurchasedArray.push(currentHistoryTxn);
+                } else {
+                    moneyReceivedArray.push(currentHistoryTxn);
+                }
+            }
+        } else if (currentHistoryTxn.sent_money <= 0 &&
+            currentHistoryTxn.received_money <= 0 &&
+            currentHistoryTxn.received_certs > 0) {
+            // This is a non-HFC asset transfer.
+            if (currentHistoryTxn.sender_name === "marketplace") {
+                proofIssuedArray.push(currentHistoryTxn);
+            } else {
+                giftReceivedArray.push(currentHistoryTxn);
+            }
+        }
+    }
+
+    if (!ui.isOpen) {
+        var notificationCount = someoneElsePurchasedArray.length +
+            proofIssuedArray.length +
+            moneyReceivedArray.length +
+            giftReceivedArray.length;
+        shouldShowDot = shouldShowDot || notificationCount > 0;
+        ui.messagesWaiting(shouldShowDot);
+
+        if (notificationCount > 0) {
+            var message;
+            if (!ui.notificationInitialCallbackMade) {
+                message = "You have " + notificationCount + " unread wallet " +
+                    "transaction" + (notificationCount === 1 ? "" : "s") + ". Open WALLET to see all activity.";
+                ui.notificationDisplayBanner(message);
+            } else {
+                for (i = 0; i < someoneElsePurchasedArray.length; i++) {
+                    message = '"' + (someoneElsePurchasedArray[i].message) + '" ' +
+                        "Open WALLET to see all activity.";
+                    ui.notificationDisplayBanner(message);
+                }
+                for (i = 0; i < proofIssuedArray.length; i++) {
+                    message = '"' + (proofIssuedArray[i].message) + '" ' +
+                        "Open WALLET to see all activity.";
+                    ui.notificationDisplayBanner(message);
+                }
+                for (i = 0; i < moneyReceivedArray.length; i++) {
+                    message = '"' + (moneyReceivedArray[i].message) + '" ' +
+                        "Open WALLET to see all activity.";
+                    ui.notificationDisplayBanner(message);
+                }
+                for (i = 0; i < giftReceivedArray.length; i++) {
+                    message = '"' + (giftReceivedArray[i].message) + '" ' +
+                        "Open WALLET to see all activity.";
+                    ui.notificationDisplayBanner(message);
+                }
+            }
+        }
+    }
+}
+
+function isReturnedDataEmpty(data) {
+    var historyArray = data.data.history;
+    return historyArray.length === 0;
+}
+
+
 var BUTTON_NAME = "WALLET";
 var WALLET_QML_SOURCE = "hifi/commerce/wallet/Wallet.qml";
 var ui;
@@ -510,7 +587,13 @@ function startup() {
         home: WALLET_QML_SOURCE,
         onOpened: walletOpened,
         onClosed: walletClosed,
-        onMessage: fromQml
+        onMessage: fromQml,
+        notificationPollEndpoint: "/api/v1/commerce/history?per_page=10",
+        notificationPollTimeoutMs: 300000,
+        notificationDataProcessPage: notificationDataProcessPage,
+        notificationPollCallback: notificationPollCallback,
+        notificationPollStopPaginatingConditionMet: isReturnedDataEmpty,
+        notificationPollCaresAboutSince: true
     });
     GlobalServices.myUsernameChanged.connect(onUsernameChanged);
 }
