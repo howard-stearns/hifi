@@ -589,7 +589,7 @@ function startup() {
         onClosed: walletClosed,
         onMessage: fromQml,
         notificationPollEndpoint: "/api/v1/commerce/history?per_page=10",
-        notificationPollTimeoutMs: 300000,
+        notificationPollTimeoutMs: 15000,
         notificationDataProcessPage: notificationDataProcessPage,
         notificationPollCallback: notificationPollCallback,
         notificationPollStopPaginatingConditionMet: isReturnedDataEmpty,

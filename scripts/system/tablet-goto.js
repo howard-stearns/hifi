@@ -122,7 +122,7 @@ function startup() {
         onOpened: gotoOpened,
         home: GOTO_QML_SOURCE,
         notificationPollEndpoint: endpoint,
-        notificationPollTimeoutMs: 60000,
+        notificationPollTimeoutMs: 15000,
         notificationDataProcessPage: notificationDataProcessPage,
         notificationPollCallback: notificationPollCallback,
         notificationPollStopPaginatingConditionMet: isReturnedDataEmpty,

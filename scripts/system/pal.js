@@ -890,7 +890,7 @@ function startup() {
         onClosed: off,
         onMessage: fromQml,
         notificationPollEndpoint: "/api/v1/users?filter=connections&status=online&per_page=10",
-        notificationPollTimeoutMs: 60000,
+        notificationPollTimeoutMs: 15000,
         notificationDataProcessPage: notificationDataProcessPage,
         notificationPollCallback: notificationPollCallback,
         notificationPollStopPaginatingConditionMet: isReturnedDataEmpty,
