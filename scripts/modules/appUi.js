@@ -332,7 +332,6 @@ function AppUi(properties) {
     that.tablet.screenChanged.connect(that.onScreenChanged);
     that.button.clicked.connect(that.onClicked);
     Script.scriptEnding.connect(that.onScriptEnding);
-    GlobalServices.findableByChanged.connect(availabilityChanged);
     GlobalServices.findableByChanged.connect(restartNotificationPoll);
     GlobalServices.myUsernameChanged.connect(restartNotificationPoll);
     if (that.buttonName == Settings.getValue("startUpApp")) {
