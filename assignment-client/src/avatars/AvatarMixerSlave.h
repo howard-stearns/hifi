@@ -24,11 +24,15 @@ public:
 
     int nodesBroadcastedTo { 0 };
     int downstreamMixersBroadcastedTo { 0 };
-    int numPacketsSent { 0 };
-    int numBytesSent { 0 };
-    int numIdentityPackets { 0 };
+    int numDataBytesSent { 0 };
+    int numTraitsBytesSent { 0 };
+    int numIdentityBytesSent { 0 };
+    int numDataPacketsSent { 0 };
+    int numTraitsPacketsSent { 0 };
+    int numIdentityPacketsSent { 0 };
     int numOthersIncluded { 0 };
     int overBudgetAvatars { 0 };
+    int numHeroesIncluded { 0 };
 
     quint64 ignoreCalculationElapsedTime { 0 };
     quint64 avatarDataPackingElapsedTime { 0 };
@@ -45,11 +49,16 @@ public:
         // sending job stats
         nodesBroadcastedTo = 0;
         downstreamMixersBroadcastedTo = 0;
-        numPacketsSent = 0;
-        numBytesSent = 0;
-        numIdentityPackets = 0;
+
+        numDataBytesSent = 0;
+        numTraitsBytesSent = 0;
+        numIdentityBytesSent = 0;
+        numDataPacketsSent = 0;
+        numTraitsPacketsSent = 0;
+        numIdentityPacketsSent = 0;
         numOthersIncluded = 0;
         overBudgetAvatars = 0;
+        numHeroesIncluded = 0;
 
         ignoreCalculationElapsedTime = 0;
         avatarDataPackingElapsedTime = 0;
@@ -65,11 +74,15 @@ public:
 
         nodesBroadcastedTo += rhs.nodesBroadcastedTo;
         downstreamMixersBroadcastedTo += rhs.downstreamMixersBroadcastedTo;
-        numPacketsSent += rhs.numPacketsSent;
-        numBytesSent += rhs.numBytesSent;
-        numIdentityPackets += rhs.numIdentityPackets;
+        numDataBytesSent += rhs.numDataBytesSent;
+        numTraitsBytesSent += rhs.numTraitsBytesSent;
+        numIdentityBytesSent += rhs.numIdentityBytesSent;
+        numDataPacketsSent += rhs.numDataPacketsSent;
+        numTraitsPacketsSent += rhs.numTraitsPacketsSent;
+        numIdentityPacketsSent += rhs.numIdentityPacketsSent;
         numOthersIncluded += rhs.numOthersIncluded;
         overBudgetAvatars += rhs.overBudgetAvatars;
+        numHeroesIncluded += rhs.numHeroesIncluded;
 
         ignoreCalculationElapsedTime += rhs.ignoreCalculationElapsedTime;
         avatarDataPackingElapsedTime += rhs.avatarDataPackingElapsedTime;
@@ -78,11 +91,20 @@ public:
         jobElapsedTime += rhs.jobElapsedTime;
         return *this;
     }
+};
 
+class EntityTree;
+using EntityTreePointer = std::shared_ptr<EntityTree>;
+
+struct SlaveSharedData {
+    QStringList skeletonURLWhitelist;
+    QUrl skeletonReplacementURL;
+    EntityTreePointer entityTree;
 };
 
 class AvatarMixerSlave {
 public:
+    AvatarMixerSlave(SlaveSharedData* sharedData) : _sharedData(sharedData) {};
     using ConstIter = NodeList::const_iterator;
 
     void configure(ConstIter begin, ConstIter end);
@@ -96,8 +118,17 @@ public:
     void harvestStats(AvatarMixerSlaveStats& stats);
 
 private:
-    int sendIdentityPacket(const AvatarMixerClientData* nodeData, const SharedNodePointer& destinationNode);
+    int sendIdentityPacket(NLPacketList& packet, const AvatarMixerClientData* nodeData, const Node& destinationNode);
     int sendReplicatedIdentityPacket(const Node& agentNode, const AvatarMixerClientData* nodeData, const Node& destinationNode);
+
+    qint64 addTraitsNodeHeader(AvatarMixerClientData* listeningNodeData,
+                               const AvatarMixerClientData* sendingNodeData,
+                               NLPacketList& traitsPacketList,
+                               qint64 bytesWritten);
+
+    qint64 addChangedTraitsToBulkPacket(AvatarMixerClientData* listeningNodeData,
+                                        const AvatarMixerClientData* sendingNodeData,
+                                        NLPacketList& traitsPacketList);
 
     void broadcastAvatarDataToAgent(const SharedNodePointer& node);
     void broadcastAvatarDataToDownstreamMixer(const SharedNodePointer& node);
@@ -111,6 +142,7 @@ private:
     float _throttlingRatio { 0.0f };
 
     AvatarMixerSlaveStats _stats;
+    SlaveSharedData* _sharedData;
 };
 
 #endif // hifi_AvatarMixerSlave_h

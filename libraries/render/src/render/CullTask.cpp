@@ -19,60 +19,50 @@
 
 using namespace render;
 
-// Culling Frustum / solidAngle test helper class
-struct Test {
-    CullFunctor _functor;
-    RenderArgs* _args;
-    RenderDetails::Item& _renderDetails;
-    ViewFrustumPointer _antiFrustum;
-    glm::vec3 _eyePos;
-    float _squareTanAlpha;
+CullTest::CullTest(CullFunctor& functor, RenderArgs* pargs, RenderDetails::Item& renderDetails, ViewFrustumPointer antiFrustum) :
+    _functor(functor),
+    _args(pargs),
+    _renderDetails(renderDetails),
+    _antiFrustum(antiFrustum) {
+    // FIXME: Keep this code here even though we don't use it yet
+    /*_eyePos = _args->getViewFrustum().getPosition();
+    float a = glm::degrees(Octree::getPerspectiveAccuracyAngle(_args->_sizeScale, _args->_boundaryLevelAdjust));
+    auto angle = std::min(glm::radians(45.0f), a); // no worse than 45 degrees
+    angle = std::max(glm::radians(1.0f / 60.0f), a); // no better than 1 minute of degree
+    auto tanAlpha = tan(angle);
+    _squareTanAlpha = (float)(tanAlpha * tanAlpha);
+    */
+}
 
-    Test(CullFunctor& functor, RenderArgs* pargs, RenderDetails::Item& renderDetails, ViewFrustumPointer antiFrustum = nullptr) :
-        _functor(functor),
-        _args(pargs),
-        _renderDetails(renderDetails),
-        _antiFrustum(antiFrustum) {
-        // FIXME: Keep this code here even though we don't use it yet
-        /*_eyePos = _args->getViewFrustum().getPosition();
-        float a = glm::degrees(Octree::getPerspectiveAccuracyAngle(_args->_sizeScale, _args->_boundaryLevelAdjust));
-        auto angle = std::min(glm::radians(45.0f), a); // no worse than 45 degrees
-        angle = std::max(glm::radians(1.0f / 60.0f), a); // no better than 1 minute of degree
-        auto tanAlpha = tan(angle);
-        _squareTanAlpha = (float)(tanAlpha * tanAlpha);
-        */
+bool CullTest::frustumTest(const AABox& bound) {
+    if (!_args->getViewFrustum().boxIntersectsFrustum(bound)) {
+        _renderDetails._outOfView++;
+        return false;
     }
+    return true;
+}
 
-    bool frustumTest(const AABox& bound) {
-        if (!_args->getViewFrustum().boxIntersectsFrustum(bound)) {
-            _renderDetails._outOfView++;
-            return false;
-        }
-        return true;
+bool CullTest::antiFrustumTest(const AABox& bound) {
+    assert(_antiFrustum);
+    if (_antiFrustum->boxInsideFrustum(bound)) {
+        _renderDetails._outOfView++;
+        return false;
     }
+    return true;
+}
 
-    bool antiFrustumTest(const AABox& bound) {
-        assert(_antiFrustum);
-        if (_antiFrustum->boxInsideFrustum(bound)) {
-            _renderDetails._outOfView++;
-            return false;
-        }
-        return true;
+bool CullTest::solidAngleTest(const AABox& bound) {
+    // FIXME: Keep this code here even though we don't use it yet
+    //auto eyeToPoint = bound.calcCenter() - _eyePos;
+    //auto boundSize = bound.getDimensions();
+    //float test = (glm::dot(boundSize, boundSize) / glm::dot(eyeToPoint, eyeToPoint)) - squareTanAlpha;
+    //if (test < 0.0f) {
+    if (!_functor(_args, bound)) {
+        _renderDetails._tooSmall++;
+        return false;
     }
-
-    bool solidAngleTest(const AABox& bound) {
-        // FIXME: Keep this code here even though we don't use it yet
-        //auto eyeToPoint = bound.calcCenter() - _eyePos;
-        //auto boundSize = bound.getDimensions();
-        //float test = (glm::dot(boundSize, boundSize) / glm::dot(eyeToPoint, eyeToPoint)) - squareTanAlpha;
-        //if (test < 0.0f) {
-        if (!_functor(_args, bound)) {
-            _renderDetails._tooSmall++;
-            return false;
-        }
-        return true;
-    }
-};
+    return true;
+}
 
 void render::cullItems(const RenderContextPointer& renderContext, const CullFunctor& cullFunctor, RenderDetails::Item& details,
                        const ItemBounds& inItems, ItemBounds& outItems) {
@@ -165,7 +155,7 @@ void FetchSpatialTree::run(const RenderContextPointer& renderContext, const Inpu
         // Octree selection!
         float threshold = 0.0f;
         if (queryFrustum.isPerspective()) {
-            threshold = getPerspectiveAccuracyAngle(args->_sizeScale, args->_boundaryLevelAdjust);
+            threshold = args->_lodAngleHalfTan;
             if (frustumResolution.y > 0) {
                 threshold = glm::max(queryFrustum.getFieldOfView() / frustumResolution.y, threshold);
             }
@@ -205,7 +195,7 @@ void CullSpatialSelection::run(const RenderContextPointer& renderContext,
         args->pushViewFrustum(_frozenFrustum); // replace the true view frustum by the frozen one
     }
 
-    Test test(_cullFunctor, args, details);
+    CullTest test(_cullFunctor, args, details);
 
     // Now we have a selection of items to render
     outItems.clear();
@@ -215,7 +205,7 @@ void CullSpatialSelection::run(const RenderContextPointer& renderContext,
     if (!srcFilter.selectsNothing()) {
         auto filter = render::ItemFilter::Builder(srcFilter).withoutSubMetaCulled().build();
 
-            // Now get the bound, and
+        // Now get the bound, and
         // filter individually against the _filter
         // visibility cull if partially selected ( octree cell contianing it was partial)
         // distance cull if was a subcell item ( octree cell is way bigger than the item bound itself, so now need to test per item)
@@ -370,16 +360,19 @@ void CullShapeBounds::run(const RenderContextPointer& renderContext, const Input
     const auto& inShapes = inputs.get0();
     const auto& cullFilter = inputs.get1();
     const auto& boundsFilter = inputs.get2();
-    const auto& antiFrustum = inputs.get3();
+    ViewFrustumPointer antiFrustum;
     auto& outShapes = outputs.edit0();
     auto& outBounds = outputs.edit1();
 
+    if (!inputs[3].isNull()) {
+        antiFrustum = inputs.get3();
+    }
     outShapes.clear();
     outBounds = AABox();
 
     if (!cullFilter.selectsNothing() || !boundsFilter.selectsNothing()) {
         auto& details = args->_details.edit(_detailType);
-        Test test(_cullFunctor, args, details, antiFrustum);
+        CullTest test(_cullFunctor, args, details, antiFrustum);
         auto scene = args->_scene;
 
         for (auto& inItems : inShapes) {
@@ -452,7 +445,7 @@ void ApplyCullFunctorOnItemBounds::run(const RenderContextPointer& renderContext
     }
 }
 
-void FetchSpatialSelection::run(const RenderContextPointer& renderContext,
+void FilterSpatialSelection::run(const RenderContextPointer& renderContext,
                                const Inputs& inputs, ItemBounds& outItems) {
     assert(renderContext->args);
     auto& scene = renderContext->_scene;

@@ -2,7 +2,7 @@ set(TARGET_NAME oven)
 
 setup_hifi_project(Widgets Gui Concurrent)
 
-link_hifi_libraries(networking shared image gpu ktx fbx baking graphics)
+link_hifi_libraries(shared shaders image gpu ktx fbx hfm baking graphics networking material-networking model-baker task)
 
 setup_memory_debugger()
 
@@ -11,7 +11,7 @@ if (WIN32)
 elseif (UNIX AND NOT APPLE)
   find_package(Threads REQUIRED)
   if(THREADS_HAVE_PTHREAD_ARG)
-    target_compile_options(PUBLIC oven "-pthread")
+    target_compile_options(oven PUBLIC "-pthread")
   endif()
 elseif (APPLE)
   # Fix up the rpath so macdeployqt works

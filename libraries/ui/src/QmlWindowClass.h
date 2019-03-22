@@ -24,7 +24,8 @@ class QScriptContext;
  * @param {OverlayWindow.Properties} [properties=null]
  *
  * @hifi-interface
- * @hifi-client-en
+ * @hifi-client-entity
+ * @hifi-avatar
  *
  * @property {Vec2} position
  * @property {Vec2} size
@@ -38,9 +39,18 @@ class QmlWindowClass : public QObject {
     Q_PROPERTY(glm::vec2 size READ getSize WRITE setSize NOTIFY sizeChanged)
     Q_PROPERTY(bool visible READ isVisible WRITE setVisible NOTIFY visibleChanged)
 
+private:
+    static QScriptValue internal_constructor(QScriptContext* context, QScriptEngine* engine, bool restricted);
 public:
-    static QScriptValue constructor(QScriptContext* context, QScriptEngine* engine);
-    QmlWindowClass();
+    static QScriptValue constructor(QScriptContext* context, QScriptEngine* engine) {
+        return internal_constructor(context, engine, false);
+    }
+
+    static QScriptValue restricted_constructor(QScriptContext* context, QScriptEngine* engine ){
+        return internal_constructor(context, engine, true);
+    }
+
+    QmlWindowClass(bool restricted);
     ~QmlWindowClass();
 
     /**jsdoc
@@ -50,6 +60,8 @@ public:
     Q_INVOKABLE virtual void initQml(QVariantMap properties);
 
     QQuickItem* asQuickItem() const;
+
+
 
 public slots:
 
@@ -250,10 +262,12 @@ protected:
 
     QPointer<QObject> _qmlWindow;
     QString _source;
+    const bool _restricted;
 
 private:
     // QmlWindow content may include WebView requiring EventBridge.
     void setKeyboardRaised(QObject* object, bool raised, bool numeric = false);
+
 };
 
 #endif

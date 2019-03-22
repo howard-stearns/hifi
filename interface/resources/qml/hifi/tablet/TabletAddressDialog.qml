@@ -18,8 +18,8 @@ import "../../styles"
 import "../../windows"
 import "../"
 import "../toolbars"
-import "../../styles-uit" as HifiStyles
-import "../../controls-uit" as HifiControls
+import stylesUit 1.0 as HifiStyles
+import controlsUit 1.0 as HifiControls
 import QtQuick.Controls 2.2 as QQC2
 import QtQuick.Templates 2.2 as T
 
@@ -34,41 +34,17 @@ StackView {
     height: parent !== null ? parent.height : undefined
     property int cardWidth: 212;
     property int cardHeight: 152;
-    property string metaverseBase: addressBarDialog.metaverseServerUrl + "/api/v1/";
     property var tablet: null;
+    property bool has3DHTML: PlatformInfo.has3DHTML();
 
-    // This version only implements rpc(method, parameters, callback(error, result)) calls initiated from here, not initiated from .js, nor "notifications".
-    property var rpcCalls: ({});
-    property var rpcCounter: 0;
+    RootHttpRequest { id: http; }
     signal sendToScript(var message);
-    function rpc(method, parameters, callback) {
-        console.debug('TabletAddressDialog: rpc: method = ', method, 'parameters = ', parameters, 'callback = ', callback)
-
-        rpcCalls[rpcCounter] = callback;
-        var message = {method: method, params: parameters, id: rpcCounter++, jsonrpc: "2.0"};
-        sendToScript(message);
-    }
     function fromScript(message) {
-        if (message.method === 'refreshFeeds') {
-            var feeds = [happeningNow, places, snapshots];
-            console.debug('TabletAddressDialog::fromScript: refreshFeeds', 'feeds = ', feeds);
-
-            feeds.forEach(function(feed) {
-                feed.protocol = encodeURIComponent(message.protocolSignature);
-                Qt.callLater(feed.fillDestinations);
-            });
-
-            return;
+        switch (message.method) {
+        case 'http.response':
+            http.handleHttpResponse(message);
+            break;
         }
-
-        var callback = rpcCalls[message.id];
-        if (!callback) {
-            // FIXME: We often recieve very long messages here, the logging of which is drastically slowing down the main thread
-            //console.log('No callback for message fromScript', JSON.stringify(message));
-            return;
-        }
-        delete rpcCalls[message.id];
-        callback(message.error, message.result);
     }
 
     Component { id: tabletWebView; TabletWebView {} }
@@ -81,10 +57,13 @@ StackView {
         Qt.callLater(function() {
             addressBarDialog.keyboardEnabled = HMD.active;
             addressLine.forceActiveFocus();
+            addressBarDialog.keyboardRaised = true;
         })
     }
+
     Component.onDestruction: {
         root.parentChanged.disconnect(center);
+        keyboard.raised = false;
     }
 
     function center() {
@@ -95,16 +74,18 @@ StackView {
     function resetAfterTeleport() {
         //storyCardFrame.shown = root.shown = false;
     }
-    function goCard(targetString) {
+    function goCard(targetString, standaloneOptimized) {
         if (0 !== targetString.indexOf('hifi://')) {
-            var card = tabletWebView.createObject();
-            card.url = addressBarDialog.metaverseServerUrl + targetString;
+            if(has3DHTML) {
+                var card = tabletWebView.createObject();
+                card.url = addressBarDialog.metaverseServerUrl + targetString;
+            }
             card.parentStackItem = root;
             root.push(card);
             return;
         }
         location.text = targetString;
-        toggleOrGo(true, targetString);
+        toggleOrGo(targetString, true, standaloneOptimized);
         clearAddressLineTimer.start();
     }
 
@@ -114,6 +95,7 @@ StackView {
 
         property bool keyboardEnabled: false
         property bool punctuationMode: false
+        property bool keyboardRaised: false
 
         width: parent.width
         height: parent.height
@@ -129,7 +111,6 @@ StackView {
             propagateComposedEvents: true
             onPressed: {
                 parent.forceActiveFocus();
-                addressBarDialog.keyboardEnabled = false;
                 mouse.accepted = false;
             }
         }
@@ -235,18 +216,24 @@ StackView {
 
             QQC2.TextField {
                 id: addressLine
+
+                focus: true
                 width: addressLineContainer.width - addressLineContainer.anchors.leftMargin - addressLineContainer.anchors.rightMargin;
                 anchors {
                     left: addressLineContainer.left;
                     leftMargin: 8;
                     verticalCenter: addressLineContainer.verticalCenter;
                 }
+
+                onFocusChanged: {
+                    addressBarDialog.raised = focus;
+                }
+
                 onTextChanged: {
                     updateLocationText(text.length > 0);
                 }
                 onAccepted: {
-                    addressBarDialog.keyboardEnabled = false;
-                    toggleOrGo();
+                    toggleOrGo(addressLine.text, false, places.isStandalone(addressLine.text));
                 }
 
                 // unfortunately TextField from Quick Controls 2 disallow customization of placeHolderText color without creation of new style
@@ -261,24 +248,20 @@ StackView {
                 color: hifi.colors.text
                 background: Item {}
 
-                QQC2.Label {
-                    T.TextField {
-                        id: control
+            }
 
-                        padding: 6 // numbers taken from Qt\5.9.2\Src\qtquickcontrols2\src\imports\controls\TextField.qml
-                        leftPadding: padding + 4
-                    }
+            QQC2.Label {
+                font: addressLine.font
 
-                    font: parent.font
+                x: addressLine.x
+                y: addressLine.y
+                leftPadding: addressLine.leftPadding
+                topPadding: addressLine.topPadding
 
-                    x: control.leftPadding
-                    y: control.topPadding
-
-                    text: parent.placeholderText2
-                    verticalAlignment: "AlignVCenter"
-                    color: 'gray'
-                    visible: parent.text === ''
-                }
+                text: addressLine.placeholderText2
+                verticalAlignment: "AlignVCenter"
+                color: 'gray'
+                visible: addressLine.text === ''
             }
 
             Rectangle {
@@ -346,12 +329,12 @@ StackView {
                         width: parent.width;
                         cardWidth: 312 + (2 * 4);
                         cardHeight: 163 + (2 * 4);
-                        metaverseServerUrl: addressBarDialog.metaverseServerUrl;
-                        labelText: 'HAPPENING NOW';
+                        labelText: 'FEATURED';
                         actions: 'announcement';
                         filter: addressLine.text;
                         goFunction: goCard;
-                        rpc: root.rpc;
+                        http: http;
+                        autoScrollTimerEnabled: true;
                     }
                     Feed {
                         id: places;
@@ -359,12 +342,11 @@ StackView {
                         cardWidth: 210;
                         cardHeight: 110 + messageHeight;
                         messageHeight: 44;
-                        metaverseServerUrl: addressBarDialog.metaverseServerUrl;
                         labelText: 'PLACES';
                         actions: 'concurrency';
                         filter: addressLine.text;
                         goFunction: goCard;
-                        rpc: root.rpc;
+                        http: http;
                     }
                     Feed {
                         id: snapshots;
@@ -373,12 +355,11 @@ StackView {
                         cardHeight: 75 + messageHeight + 4;
                         messageHeight: 32;
                         textPadding: 6;
-                        metaverseServerUrl: addressBarDialog.metaverseServerUrl;
                         labelText: 'RECENT SNAPS';
                         actions: 'snapshot';
                         filter: addressLine.text;
                         goFunction: goCard;
-                        rpc: root.rpc;
+                        http: http;
                     }
                 }
             }
@@ -406,7 +387,7 @@ StackView {
 
         HifiControls.Keyboard {
             id: keyboard
-            raised: parent.keyboardEnabled
+            raised: parent.keyboardEnabled && parent.keyboardRaised
             numeric: parent.punctuationMode
             anchors {
                 bottom: parent.bottom
@@ -414,7 +395,18 @@ StackView {
                 right: parent.right
             }
         }
+    }
 
+    TADLightbox {
+        id: unoptimizedDomain
+        titleText: "Unoptimized Domain"
+        bodyText:  "You're trying to access a place that hasn't been optimized for your device. Are you sure you want to continue."
+        button1text: "CANCEL"
+        button2text: "YES CONTINUE"
+        visible: false
+        button1method: function() {
+            visible = false;
+        }
     }
 
     function updateLocationText(enteringAddress) {
@@ -429,14 +421,30 @@ StackView {
         }
     }
 
-    function toggleOrGo(fromSuggestions, address) {
-        if (address !== undefined && address !== "") {
-            addressBarDialog.loadAddress(address, fromSuggestions);
-            clearAddressLineTimer.start();
-        } else if (addressLine.text !== "") {
-            addressBarDialog.loadAddress(addressLine.text, fromSuggestions);
-            clearAddressLineTimer.start();
+    function toggleOrGo(address, fromSuggestions, standaloneOptimized) {
+
+        var goTarget = function () {
+            if (address !== undefined && address !== "") {
+                addressBarDialog.loadAddress(address, fromSuggestions);
+                clearAddressLineTimer.start();
+            } else if (addressLine.text !== "") {
+                addressBarDialog.loadAddress(addressLine.text, fromSuggestions);
+                clearAddressLineTimer.start();
+            }
+            DialogsManager.hideAddressBar();
         }
-        DialogsManager.hideAddressBar();
+
+        unoptimizedDomain.button2method = function() {
+            Settings.setValue("ShowUnoptimizedDomainWarning", false);
+            goTarget();
+        }
+
+        var showPopup = PlatformInfo.isStandalone() && !standaloneOptimized && Settings.getValue("ShowUnoptimizedDomainWarning", true);
+
+        if(!showPopup) {
+            goTarget();
+        } else {
+            unoptimizedDomain.visible = true;
+        }
     }
 }

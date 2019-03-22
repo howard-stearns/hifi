@@ -4,12 +4,11 @@ import QtWebChannel 1.0
 import "../../controls"
 import "../toolbars"
 import QtGraphicalEffects 1.0
-import "../../controls-uit" as HifiControls
-import "../../styles-uit"
+import controlsUit 1.0 as HifiControls
+import stylesUit 1.0
 
 TabBar {
     id: editTabView
-    // anchors.fill: parent
     width: parent.width
     contentWidth: parent.width
     padding: 0
@@ -34,7 +33,7 @@ TabBar {
                     width: parent.width
                     clip: true
 
-                    contentHeight: createEntitiesFlow.height +  importButton.height + assetServerButton.height +
+                    contentHeight: createEntitiesFlow.height + importButton.height + assetServerButton.height +
                                    header.anchors.topMargin + createEntitiesFlow.anchors.topMargin +
                                    assetServerButton.anchors.topMargin + importButton.anchors.topMargin +
                                    header.paintedHeight
@@ -77,8 +76,9 @@ TabBar {
                             text: "MODEL"
                             onClicked: {
                                 editRoot.sendToScript({
-                                                          method: "newEntityButtonClicked", params: { buttonName: "newModelButton" }
-                                                      });
+                                    method: "newEntityButtonClicked",
+                                    params: { buttonName: "newModelButton" }
+                                });
                                 editTabView.currentIndex = 2
                             }
                         }
@@ -88,8 +88,9 @@ TabBar {
                             text: "CUBE"
                             onClicked: {
                                 editRoot.sendToScript({
-                                                          method: "newEntityButtonClicked", params: { buttonName: "newCubeButton" }
-                                                      });
+                                    method: "newEntityButtonClicked",
+                                    params: { buttonName: "newCubeButton" }
+                                });
                                 editTabView.currentIndex = 2
                             }
                         }
@@ -99,8 +100,9 @@ TabBar {
                             text: "SPHERE"
                             onClicked: {
                                 editRoot.sendToScript({
-                                                          method: "newEntityButtonClicked", params: { buttonName: "newSphereButton" }
-                                                      });
+                                    method: "newEntityButtonClicked",
+                                    params: { buttonName: "newSphereButton" }
+                                });
                                 editTabView.currentIndex = 2
                             }
                         }
@@ -110,8 +112,9 @@ TabBar {
                             text: "LIGHT"
                             onClicked: {
                                 editRoot.sendToScript({
-                                                          method: "newEntityButtonClicked", params: { buttonName: "newLightButton" }
-                                                      });
+                                    method: "newEntityButtonClicked",
+                                    params: { buttonName: "newLightButton" }
+                                });
                                 editTabView.currentIndex = 2
                             }
                         }
@@ -121,8 +124,9 @@ TabBar {
                             text: "TEXT"
                             onClicked: {
                                 editRoot.sendToScript({
-                                                          method: "newEntityButtonClicked", params: { buttonName: "newTextButton" }
-                                                      });
+                                    method: "newEntityButtonClicked",
+                                    params: { buttonName: "newTextButton" }
+                                });
                                 editTabView.currentIndex = 2
                             }
                         }
@@ -132,8 +136,9 @@ TabBar {
                             text: "IMAGE"
                             onClicked: {
                                 editRoot.sendToScript({
-                                                          method: "newEntityButtonClicked", params: { buttonName: "newImageButton" }
-                                                      });
+                                    method: "newEntityButtonClicked",
+                                    params: { buttonName: "newImageButton" }
+                                });
                                 editTabView.currentIndex = 2
                             }
                         }
@@ -143,8 +148,9 @@ TabBar {
                             text: "WEB"
                             onClicked: {
                                 editRoot.sendToScript({
-                                                          method: "newEntityButtonClicked", params: { buttonName: "newWebButton" }
-                                                      });
+                                    method: "newEntityButtonClicked",
+                                    params: { buttonName: "newWebButton" }
+                                });
                                 editTabView.currentIndex = 2
                             }
                         }
@@ -154,8 +160,9 @@ TabBar {
                             text: "ZONE"
                             onClicked: {
                                 editRoot.sendToScript({
-                                                          method: "newEntityButtonClicked", params: { buttonName: "newZoneButton" }
-                                                      });
+                                    method: "newEntityButtonClicked",
+                                    params: { buttonName: "newZoneButton" }
+                                });
                                 editTabView.currentIndex = 2
                             }
                         }
@@ -165,9 +172,10 @@ TabBar {
                             text: "PARTICLE"
                             onClicked: {
                                 editRoot.sendToScript({
-                                                          method: "newEntityButtonClicked", params: { buttonName: "newParticleButton" }
-                                                      });
-                                editTabView.currentIndex = 4
+                                    method: "newEntityButtonClicked",
+                                    params: { buttonName: "newParticleButton" }
+                                });
+                                editTabView.currentIndex = 2
                             }
                         }
 
@@ -176,8 +184,9 @@ TabBar {
                             text: "MATERIAL"
                             onClicked: {
                                 editRoot.sendToScript({
-                                                          method: "newEntityButtonClicked", params: { buttonName: "newMaterialButton" }
-                                                      });
+                                    method: "newEntityButtonClicked",
+                                    params: { buttonName: "newMaterialButton" }
+                                });
                                 editTabView.currentIndex = 2
                             }
                         }
@@ -196,8 +205,9 @@ TabBar {
                         anchors.topMargin: 35
                         onClicked: {
                             editRoot.sendToScript({
-                                                      method: "newEntityButtonClicked", params: { buttonName: "openAssetBrowserButton" }
-                                                  });
+                                method: "newEntityButtonClicked",
+                                params: { buttonName: "openAssetBrowserButton" }
+                            });
                         }
                     }
 
@@ -214,8 +224,9 @@ TabBar {
                         anchors.topMargin: 20
                         onClicked: {
                             editRoot.sendToScript({
-                                                      method: "newEntityButtonClicked", params: { buttonName: "importEntitiesButton" }
-                                                  });
+                                method: "newEntityButtonClicked",
+                                params: { buttonName: "importEntitiesButton" }
+                            });
                         }
                     }
                 }
@@ -234,6 +245,7 @@ TabBar {
                 id: entityListToolWebView
                 url: Paths.defaultScripts + "/system/html/entityList.html"
                 enabled: true
+                blurOnCtrlShift: false
             }
         }
     }
@@ -249,6 +261,7 @@ TabBar {
                 id: entityPropertiesWebView
                 url: Paths.defaultScripts + "/system/html/entityProperties.html"
                 enabled: true
+                blurOnCtrlShift: false
             }
         }
     }
@@ -264,21 +277,7 @@ TabBar {
                 id: gridControlsWebView
                 url: Paths.defaultScripts + "/system/html/gridControls.html"
                 enabled: true
-            }
-        }
-    }
-
-    EditTabButton {
-        title: "P"
-        active: true
-        enabled: true
-        property string originalUrl: ""
-
-        property Component visualItem: Component {
-            WebView {
-                id: particleExplorerWebView
-                url: Paths.defaultScripts + "/system/particle_explorer/particleExplorer.html"
-                enabled: true
+                blurOnCtrlShift: false
             }
         }
     }
@@ -289,7 +288,7 @@ TabBar {
                 selectTab(message.params.id);
                 break;
             default:
-                console.warn('Unrecognized message:', JSON.stringify(message));
+                console.warn('EditTabView.qml: Unrecognized message');
         }
     }
 
@@ -314,9 +313,6 @@ TabBar {
                     break;
                 case 'grid':
                     editTabView.currentIndex = 3;
-                    break;
-                case 'particle':
-                    editTabView.currentIndex = 4;
                     break;
                 default:
                     console.warn('Attempt to switch to invalid tab:', id);

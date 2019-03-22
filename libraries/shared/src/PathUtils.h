@@ -25,6 +25,7 @@
  *
  * @hifi-interface
  * @hifi-client-entity
+ * @hifi-avatar
  *
  * @deprecated The Paths API is deprecated. Use {@link Script.resolvePath} and {@link Script.resourcesPath} instead.
  * @readonly
@@ -37,6 +38,7 @@ class PathUtils : public QObject, public Dependency {
     Q_PROPERTY(QString resources READ resourcesPath CONSTANT)
     Q_PROPERTY(QUrl defaultScripts READ defaultScriptsLocation CONSTANT)
 public:
+    static const QString& getRccPath();
     static const QString& resourcesUrl();
     static QUrl resourcesUrl(const QString& relative);
     static const QString& resourcesPath();

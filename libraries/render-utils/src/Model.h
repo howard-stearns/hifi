@@ -37,6 +37,7 @@
 #include "GeometryCache.h"
 #include "TextureCache.h"
 #include "Rig.h"
+#include "PrimitiveMode.h"
 
 // Use dual quaternion skinning!
 // Must match define in Skinning.slh
@@ -64,6 +65,29 @@ class Model;
 using ModelPointer = std::shared_ptr<Model>;
 using ModelWeakPointer = std::weak_ptr<Model>;
 
+struct SortedTriangleSet {
+    SortedTriangleSet(float distance, TriangleSet* triangleSet, int partIndex, int shapeID, int subMeshIndex) :
+        distance(distance), triangleSet(triangleSet), partIndex(partIndex), shapeID(shapeID), subMeshIndex(subMeshIndex) {}
+
+    float distance;
+    TriangleSet* triangleSet;
+    int partIndex;
+    int shapeID;
+    int subMeshIndex;
+};
+
+struct BlendshapeOffsetPacked {
+    glm::uvec4 packedPosNorTan;
+};
+
+struct BlendshapeOffsetUnpacked {
+    glm::vec3 positionOffset;
+    glm::vec3 normalOffset;
+    glm::vec3 tangentOffset;
+};
+
+using BlendshapeOffset = BlendshapeOffsetPacked;
+using BlendShapeOperator = std::function<void(int, const QVector<BlendshapeOffset>&, const QVector<int>&, const render::ItemIDs&)>;
 
 /// A generic 3D model displaying geometry loaded from a URL.
 class Model : public QObject, public std::enable_shared_from_this<Model>, public scriptable::ModelProvider {
@@ -100,11 +124,7 @@ public:
     bool canCastShadow() const;
     void setCanCastShadow(bool canCastShadow, const render::ScenePointer& scene = nullptr);
 
-    void setLayeredInFront(bool isLayeredInFront, const render::ScenePointer& scene = nullptr);
-    void setLayeredInHUD(bool isLayeredInHUD, const render::ScenePointer& scene = nullptr);
-
-    bool isLayeredInFront() const;
-    bool isLayeredInHUD() const;
+    void setHifiRenderLayer(render::hifi::Layer layer, const render::ScenePointer& scene = nullptr);
 
     // Access the current RenderItemKey Global Flags used by the model and applied to the render items  representing the parts of the model.
     const render::ItemKey getRenderItemKeyGlobalFlags() const;
@@ -119,7 +139,14 @@ public:
     }
     bool addToScene(const render::ScenePointer& scene,
                     render::Transaction& transaction,
-                    render::Item::Status::Getters& statusGetters);
+                    BlendShapeOperator modelBlendshapeOperator) {
+        auto getters = render::Item::Status::Getters(0);
+        return addToScene(scene, transaction, getters, modelBlendshapeOperator);
+    }
+    bool addToScene(const render::ScenePointer& scene,
+                    render::Transaction& transaction,
+                    render::Item::Status::Getters& statusGetters,
+                    BlendShapeOperator modelBlendshapeOperator = nullptr);
     void removeFromScene(const render::ScenePointer& scene, render::Transaction& transaction);
     bool isRenderable() const;
 
@@ -133,15 +160,11 @@ public:
 
     bool maybeStartBlender();
 
-    /// Sets blended vertices computed in a separate thread.
-    void setBlendedVertices(int blendNumber, const Geometry::WeakPointer& geometry,
-        const QVector<glm::vec3>& vertices, const QVector<glm::vec3>& normals, const QVector<glm::vec3>& tangents);
-
-    bool isLoaded() const { return (bool)_renderGeometry && _renderGeometry->isGeometryLoaded(); }
+    bool isLoaded() const { return (bool)_renderGeometry && _renderGeometry->isHFMModelLoaded(); }
     bool isAddedToScene() const { return _addedToScene; }
 
-    void setIsWireframe(bool isWireframe) { _isWireframe = isWireframe; }
-    bool isWireframe() const { return _isWireframe; }
+    void setPrimitiveMode(PrimitiveMode primitiveMode);
+    PrimitiveMode getPrimitiveMode() const { return _primitiveMode; }
 
     void reset();
 
@@ -153,22 +176,21 @@ public:
 
     /// Returns a reference to the shared geometry.
     const Geometry::Pointer& getGeometry() const { return _renderGeometry; }
-    /// Returns a reference to the shared collision geometry.
-    const Geometry::Pointer& getCollisionGeometry() const { return _collisionGeometry; }
 
     const QVariantMap getTextures() const { assert(isLoaded()); return _renderGeometry->getTextures(); }
     Q_INVOKABLE virtual void setTextures(const QVariantMap& textures);
 
     /// Provided as a convenience, will crash if !isLoaded()
-    // And so that getGeometry() isn't chained everywhere
-    const FBXGeometry& getFBXGeometry() const { assert(isLoaded()); return _renderGeometry->getFBXGeometry(); }
+    // And so that getHFMModel() isn't chained everywhere
+    const HFMModel& getHFMModel() const { assert(isLoaded()); return _renderGeometry->getHFMModel(); }
+    const MaterialMapping& getMaterialMapping() const { assert(isLoaded()); return _renderGeometry->getMaterialMapping(); }
 
     bool isActive() const { return isLoaded(); }
 
     bool didVisualGeometryRequestFail() const { return _visualGeometryRequestFailed; }
     bool didCollisionGeometryRequestFail() const { return _collisionGeometryRequestFailed; }
 
-    bool convexHullContains(glm::vec3 point);
+    glm::mat4 getWorldToHFMMatrix() const;
 
     QStringList getJointNames() const;
 
@@ -180,6 +202,9 @@ public:
     bool findRayIntersectionAgainstSubMeshes(const glm::vec3& origin, const glm::vec3& direction, float& distance,
                                              BoxFace& face, glm::vec3& surfaceNormal,
                                              QVariantMap& extraInfo, bool pickAgainstTriangles = false, bool allowBackface = false);
+    bool findParabolaIntersectionAgainstSubMeshes(const glm::vec3& origin, const glm::vec3& velocity, const glm::vec3& acceleration,
+                                                  float& parabolicDistance, BoxFace& face, glm::vec3& surfaceNormal,
+                                                  QVariantMap& extraInfo, bool pickAgainstTriangles = false, bool allowBackface = false);
 
     void setOffset(const glm::vec3& offset);
     const glm::vec3& getOffset() const { return _offset; }
@@ -260,7 +285,6 @@ public:
 
     // returns 'true' if needs fullUpdate after geometry change
     virtual bool updateGeometry();
-    void setCollisionMesh(graphics::MeshPointer mesh);
 
     void setLoadingPriority(float priority) { _loadingPriority = priority; }
 
@@ -318,6 +342,7 @@ public:
 
     uint32_t getGeometryCounter() const { return _deleteGeometryCounter; }
     const QMap<render::ItemID, render::PayloadPointer>& getRenderItems() const { return _modelMeshRenderItemsMap; }
+    BlendShapeOperator getModelBlendshapeOperator() const { return _modelBlendshapeOperator; }
 
     void renderDebugMeshBoxes(gpu::Batch& batch);
 
@@ -335,6 +360,8 @@ public:
     void addMaterial(graphics::MaterialLayer material, const std::string& parentMaterialName);
     void removeMaterial(graphics::MaterialPointer material, const std::string& parentMaterialName);
 
+    std::unordered_map<int, QVector<BlendshapeOffset>> _blendshapeOffsets;
+
 public slots:
     void loadURLFinished(bool success);
 
@@ -347,14 +374,15 @@ signals:
 
 protected:
 
+    std::unordered_map<unsigned int, quint16> _priorityMap; // only used for materialMapping
+    std::unordered_map<unsigned int, std::vector<graphics::MaterialLayer>> _materialMapping; // generated during applyMaterialMapping
+    void applyMaterialMapping();
+
     void setBlendshapeCoefficients(const QVector<float>& coefficients) { _blendshapeCoefficients = coefficients; }
     const QVector<float>& getBlendshapeCoefficients() const { return _blendshapeCoefficients; }
 
     /// Clear the joint states
     void clearJointState(int index);
-
-    /// Returns the index of the last free ancestor of the indexed joint, or -1 if not found.
-    int getLastFreeJointIndex(int jointIndex) const;
 
     /// \param jointIndex index of joint in model structure
     /// \param position[out] position of joint in model-frame
@@ -362,7 +390,6 @@ protected:
     bool getJointPosition(int jointIndex, glm::vec3& position) const;
 
     Geometry::Pointer _renderGeometry; // only ever set by its watcher
-    Geometry::Pointer _collisionGeometry;
 
     GeometryResourceWatcher _renderWatcher;
 
@@ -410,41 +437,30 @@ protected:
 
     virtual void deleteGeometry();
 
-    QVector<float> _blendshapeCoefficients;
-
     QUrl _url;
 
-    gpu::Buffers _blendedVertexBuffers;
-
-    QVector<QVector<QSharedPointer<Texture> > > _dilatedTextures;
-
+    BlendShapeOperator _modelBlendshapeOperator { nullptr };
+    QVector<float> _blendshapeCoefficients;
     QVector<float> _blendedBlendshapeCoefficients;
-    int _blendNumber;
-    int _appliedBlendNumber;
+    int _blendNumber { 0 };
+    bool _blendshapeOffsetsInitialized { false };
 
     mutable QMutex _mutex{ QMutex::Recursive };
 
     bool _overrideModelTransform { false };
     bool _triangleSetsValid { false };
-    void calculateTriangleSets(const FBXGeometry& geometry);
-    QVector<TriangleSet> _modelSpaceMeshTriangleSets; // model space triangles for all sub meshes
+    void calculateTriangleSets(const HFMModel& hfmModel);
+    std::vector<std::vector<TriangleSet>> _modelSpaceMeshTriangleSets; // model space triangles for all sub meshes
 
+    virtual void createRenderItemSet();
 
-    void createRenderItemSet();
-    virtual void createVisibleRenderItemSet();
-    virtual void createCollisionRenderItemSet();
-
-    bool _isWireframe;
+    PrimitiveMode _primitiveMode { PrimitiveMode::SOLID };
     bool _useDualQuaternionSkinning { false };
 
     // debug rendering support
     int _debugMeshBoxesID = GeometryCache::UNKNOWN_ID;
 
-
     static AbstractViewStateInterface* _viewState;
-
-    QVector<std::shared_ptr<MeshPartPayload>> _collisionRenderItems;
-    QMap<render::ItemID, render::PayloadPointer> _collisionRenderItemsMap;
 
     QVector<std::shared_ptr<ModelMeshPartPayload>> _modelMeshRenderItems;
     QMap<render::ItemID, render::PayloadPointer> _modelMeshRenderItemsMap;
@@ -457,7 +473,7 @@ protected:
     bool _needsFixupInScene { true }; // needs to be removed/re-added to scene
     bool _needsReload { true };
     bool _needsUpdateClusterMatrices { true };
-    mutable bool _needsUpdateTextures { true };
+    QVariantMap _pendingTextures { };
 
     friend class ModelMeshPartPayload;
     Rig _rig;
@@ -489,16 +505,19 @@ protected:
 
     bool shouldInvalidatePayloadShapeKey(int meshIndex);
 
+    void initializeBlendshapes(const HFMMesh& mesh, int index);
+
 private:
     float _loadingPriority { 0.0f };
 
     void calculateTextureInfo();
 
-    std::vector<unsigned int> getMeshIDsFromMaterialID(QString parentMaterialName);
+    std::set<unsigned int> getMeshIDsFromMaterialID(QString parentMaterialName);
 };
 
 Q_DECLARE_METATYPE(ModelPointer)
 Q_DECLARE_METATYPE(Geometry::WeakPointer)
+Q_DECLARE_METATYPE(BlendshapeOffset)
 
 /// Handle management of pending models that need blending
 class ModelBlender : public QObject, public Dependency {
@@ -510,9 +529,11 @@ public:
     /// Adds the specified model to the list requiring vertex blends.
     void noteRequiresBlend(ModelPointer model);
 
+    bool shouldComputeBlendshapes() { return _computeBlendshapes; }
+
 public slots:
-    void setBlendedVertices(ModelPointer model, int blendNumber, const Geometry::WeakPointer& geometry,
-        const QVector<glm::vec3>& vertices, const QVector<glm::vec3>& normals, const QVector<glm::vec3>& tangents);
+    void setBlendedVertices(ModelPointer model, int blendNumber, QVector<BlendshapeOffset> blendshapeOffsets, QVector<int> blendedMeshSizes);
+    void setComputeBlendshapes(bool computeBlendshapes) { _computeBlendshapes = computeBlendshapes; }
 
 private:
     using Mutex = std::mutex;
@@ -521,9 +542,12 @@ private:
     ModelBlender();
     virtual ~ModelBlender();
 
-    std::set<ModelWeakPointer, std::owner_less<ModelWeakPointer>> _modelsRequiringBlends;
+    std::queue<ModelWeakPointer> _modelsRequiringBlendsQueue;
+    std::set<ModelWeakPointer, std::owner_less<ModelWeakPointer>> _modelsRequiringBlendsSet;
     int _pendingBlenders;
     Mutex _mutex;
+
+    bool _computeBlendshapes { true };
 };
 
 

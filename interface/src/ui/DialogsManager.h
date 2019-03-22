@@ -48,6 +48,7 @@ public slots:
     void setDomainConnectionFailureVisibility(bool visible);
     void toggleLoginDialog();
     void showLoginDialog();
+    void hideLoginDialog();
     void octreeStatsDetails();
     void lodTools();
     void hmdTools(bool showTools);
@@ -80,6 +81,7 @@ private:
     QPointer<OctreeStatsDialog> _octreeStatsDialog;
     QPointer<TestingDialog> _testingDialog;
     QPointer<DomainConnectionDialog> _domainConnectionDialog;
+    bool _dialogCreatedWhileShown { false };
     bool _addressBarVisible { false };
 };
 

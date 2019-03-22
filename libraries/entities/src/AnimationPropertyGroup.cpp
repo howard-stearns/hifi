@@ -22,13 +22,14 @@ const float AnimationPropertyGroup::MAXIMUM_POSSIBLE_FRAME = 100000.0f;
 
 bool operator==(const AnimationPropertyGroup& a, const AnimationPropertyGroup& b) {
     return
-
         (a._currentFrame == b._currentFrame) &&
         (a._running == b._running) &&
         (a._loop == b._loop) &&
         (a._hold == b._hold) &&
         (a._firstFrame == b._firstFrame) &&
         (a._lastFrame == b._lastFrame) &&
+        (a._fps == b._fps) &&
+        (a._allowTranslation == b._allowTranslation) &&
         (a._url == b._url);
 }
 
@@ -40,6 +41,8 @@ bool operator!=(const AnimationPropertyGroup& a, const AnimationPropertyGroup& b
         (a._hold != b._hold) ||
         (a._firstFrame != b._firstFrame) ||
         (a._lastFrame != b._lastFrame) ||
+        (a._fps != b._fps) ||
+        (a._allowTranslation != b._allowTranslation) ||
         (a._url != b._url);
 }
 
@@ -170,7 +173,6 @@ void AnimationPropertyGroup::setFromOldAnimationSettings(const QString& value) {
 
 void AnimationPropertyGroup::debugDump() const {
     qCDebug(entities) << "   AnimationPropertyGroup: ---------------------------------------------";
-    qCDebug(entities) << "       url:" << getURL() << " has changed:" << urlChanged();
     qCDebug(entities) << "       fps:" << getFPS() << " has changed:" << fpsChanged();
     qCDebug(entities) << "currentFrame:" << getCurrentFrame() << " has changed:" << currentFrameChanged();
     qCDebug(entities) << "allowTranslation:" << getAllowTranslation() << " has changed:" << allowTranslationChanged(); 
@@ -180,14 +182,29 @@ void AnimationPropertyGroup::listChangedProperties(QList<QString>& out) {
     if (urlChanged()) {
         out << "animation-url";
     }
+    if (allowTranslationChanged()) {
+        out << "animation-allowTranslation";
+    }
     if (fpsChanged()) {
         out << "animation-fps";
     }
     if (currentFrameChanged()) {
         out << "animation-currentFrame";
     }
-    if (allowTranslationChanged()) {
-        out << "animation-allowTranslation";
+    if (runningChanged()) {
+        out << "animation-running";
+    }
+    if (loopChanged()) {
+        out << "animation-loop";
+    }
+    if (firstFrameChanged()) {
+        out << "animation-firstFrame";
+    }
+    if (lastFrameChanged()) {
+        out << "animation-lastFrame";
+    }
+    if (holdChanged()) {
+        out << "animation-hold";
     }
 }
 
@@ -222,7 +239,6 @@ bool AnimationPropertyGroup::decodeFromEditPacket(EntityPropertyFlags& propertyF
 
     READ_ENTITY_PROPERTY(PROP_ANIMATION_URL, QString, setURL);
     READ_ENTITY_PROPERTY(PROP_ANIMATION_ALLOW_TRANSLATION, bool, setAllowTranslation);
-
     READ_ENTITY_PROPERTY(PROP_ANIMATION_FPS, float, setFPS);
     READ_ENTITY_PROPERTY(PROP_ANIMATION_FRAME_INDEX, float, setCurrentFrame);
     READ_ENTITY_PROPERTY(PROP_ANIMATION_PLAYING, bool, setRunning);
@@ -232,6 +248,7 @@ bool AnimationPropertyGroup::decodeFromEditPacket(EntityPropertyFlags& propertyF
     READ_ENTITY_PROPERTY(PROP_ANIMATION_HOLD, bool, setHold);
 
     DECODE_GROUP_PROPERTY_HAS_CHANGED(PROP_ANIMATION_URL, URL);
+    DECODE_GROUP_PROPERTY_HAS_CHANGED(PROP_ANIMATION_ALLOW_TRANSLATION, AllowTranslation);
     DECODE_GROUP_PROPERTY_HAS_CHANGED(PROP_ANIMATION_FPS, FPS);
     DECODE_GROUP_PROPERTY_HAS_CHANGED(PROP_ANIMATION_FRAME_INDEX, CurrentFrame);
     DECODE_GROUP_PROPERTY_HAS_CHANGED(PROP_ANIMATION_PLAYING, Running);
@@ -239,7 +256,6 @@ bool AnimationPropertyGroup::decodeFromEditPacket(EntityPropertyFlags& propertyF
     DECODE_GROUP_PROPERTY_HAS_CHANGED(PROP_ANIMATION_FIRST_FRAME, FirstFrame);
     DECODE_GROUP_PROPERTY_HAS_CHANGED(PROP_ANIMATION_LAST_FRAME, LastFrame);
     DECODE_GROUP_PROPERTY_HAS_CHANGED(PROP_ANIMATION_HOLD, Hold);
-    DECODE_GROUP_PROPERTY_HAS_CHANGED(PROP_ANIMATION_ALLOW_TRANSLATION, AllowTranslation);
     
     processedBytes += bytesRead;
 
@@ -250,6 +266,7 @@ bool AnimationPropertyGroup::decodeFromEditPacket(EntityPropertyFlags& propertyF
 
 void AnimationPropertyGroup::markAllChanged() {
     _urlChanged = true;
+    _allowTranslationChanged = true;
     _fpsChanged = true;
     _currentFrameChanged = true;
     _runningChanged = true;
@@ -257,13 +274,13 @@ void AnimationPropertyGroup::markAllChanged() {
     _firstFrameChanged = true;
     _lastFrameChanged = true;
     _holdChanged = true;
-    _allowTranslationChanged = true;
 }
 
 EntityPropertyFlags AnimationPropertyGroup::getChangedProperties() const {
     EntityPropertyFlags changedProperties;
 
     CHECK_PROPERTY_CHANGE(PROP_ANIMATION_URL, url);
+    CHECK_PROPERTY_CHANGE(PROP_ANIMATION_ALLOW_TRANSLATION, allowTranslation);
     CHECK_PROPERTY_CHANGE(PROP_ANIMATION_FPS, fps);
     CHECK_PROPERTY_CHANGE(PROP_ANIMATION_FRAME_INDEX, currentFrame);
     CHECK_PROPERTY_CHANGE(PROP_ANIMATION_PLAYING, running);
@@ -271,7 +288,6 @@ EntityPropertyFlags AnimationPropertyGroup::getChangedProperties() const {
     CHECK_PROPERTY_CHANGE(PROP_ANIMATION_FIRST_FRAME, firstFrame);
     CHECK_PROPERTY_CHANGE(PROP_ANIMATION_LAST_FRAME, lastFrame);
     CHECK_PROPERTY_CHANGE(PROP_ANIMATION_HOLD, hold);
-    CHECK_PROPERTY_CHANGE(PROP_ANIMATION_ALLOW_TRANSLATION, allowTranslation);
 
     return changedProperties;
 }
@@ -307,6 +323,7 @@ EntityPropertyFlags AnimationPropertyGroup::getEntityProperties(EncodeBitstreamP
     EntityPropertyFlags requestedProperties;
 
     requestedProperties += PROP_ANIMATION_URL;
+    requestedProperties += PROP_ANIMATION_ALLOW_TRANSLATION;
     requestedProperties += PROP_ANIMATION_FPS;
     requestedProperties += PROP_ANIMATION_FRAME_INDEX;
     requestedProperties += PROP_ANIMATION_PLAYING;
@@ -314,7 +331,6 @@ EntityPropertyFlags AnimationPropertyGroup::getEntityProperties(EncodeBitstreamP
     requestedProperties += PROP_ANIMATION_FIRST_FRAME;
     requestedProperties += PROP_ANIMATION_LAST_FRAME;
     requestedProperties += PROP_ANIMATION_HOLD;
-    requestedProperties += PROP_ANIMATION_ALLOW_TRANSLATION;
 
     return requestedProperties;
 }

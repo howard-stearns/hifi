@@ -15,8 +15,17 @@
 #include <QDate>
 #include <QtCore/QLoggingCategory>
 
+#if !defined(__clang__) && defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsuggest-override"
+#endif
+
 #include <quazip5/quazipfile.h>
 #include <quazip5/quazipdir.h>
+
+#if !defined(__clang__) && defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
 
 #include <AssetClient.h>
 #include <AssetRequest.h>
@@ -34,8 +43,9 @@ static const chrono::minutes MAX_REFRESH_TIME { 5 };
 Q_DECLARE_LOGGING_CATEGORY(asset_backup)
 Q_LOGGING_CATEGORY(asset_backup, "hifi.asset-backup");
 
-AssetsBackupHandler::AssetsBackupHandler(const QString& backupDirectory) :
-    _assetsDirectory(backupDirectory + ASSETS_DIR)
+AssetsBackupHandler::AssetsBackupHandler(const QString& backupDirectory, bool assetServerEnabled) :
+    _assetsDirectory(backupDirectory + ASSETS_DIR),
+    _assetServerEnabled(assetServerEnabled)
 {
     // Make sure the asset directory exists.
     QDir(_assetsDirectory).mkpath(".");
@@ -53,6 +63,7 @@ void AssetsBackupHandler::setupRefreshTimer() {
     auto nodeList = DependencyManager::get<LimitedNodeList>();
     QObject::connect(nodeList.data(), &LimitedNodeList::nodeActivated, this, [this](SharedNodePointer node) {
         if (node->getType() == NodeType::AssetServer) {
+            assert(_assetServerEnabled);
             // run immediately for the first time.
             _mappingsRefreshTimer.start(0);
         }
@@ -233,12 +244,13 @@ void AssetsBackupHandler::createBackup(const QString& backupName, QuaZip& zip) {
         return;
     }
 
-    if (_lastMappingsRefresh.time_since_epoch().count() == 0) {
+    if (_assetServerEnabled && _lastMappingsRefresh.time_since_epoch().count() == 0) {
         qCWarning(asset_backup) << "Current mappings not yet loaded.";
+        _backups.emplace_back(backupName, AssetUtils::Mappings(), true);
         return;
     }
 
-    if ((p_high_resolution_clock::now() - _lastMappingsRefresh) > MAX_REFRESH_TIME) {
+    if (_assetServerEnabled && (p_high_resolution_clock::now() - _lastMappingsRefresh) > MAX_REFRESH_TIME) {
         qCWarning(asset_backup) << "Backing up asset mappings that might be stale.";
     }
 

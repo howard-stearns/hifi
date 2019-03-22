@@ -69,12 +69,12 @@ GLTexture* GL41Backend::syncGPUObject(const TexturePointer& texturePointer) {
                 break;
 
             case TextureUsageType::STRICT_RESOURCE:
-                qCDebug(gpugllogging) << "Strict texture " << texture.source().c_str();
+                qCDebug(gpugllogging) << "Strict texture";
                 object = new GL41StrictResourceTexture(shared_from_this(), texture);
                 break;
 
             case TextureUsageType::RESOURCE:
-                qCDebug(gpugllogging) << "variable / Strict texture " << texture.source().c_str();
+                qCDebug(gpugllogging) << "variable / Strict texture";
                 object = new GL41ResourceTexture(shared_from_this(), texture);
                 _textureManagement._transferEngine->addMemoryManagedTexture(texturePointer);
                 break;
@@ -182,7 +182,7 @@ void GL41Texture::syncSampler() const {
     glTexParameteri(_target, GL_TEXTURE_MAG_FILTER, fm.magFilter);
 
     if (sampler.doComparison()) {
-        glTexParameteri(_target, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE_ARB);
+        glTexParameteri(_target, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
         glTexParameteri(_target, GL_TEXTURE_COMPARE_FUNC, COMPARISON_TO_GL[sampler.getComparisonFunction()]);
     } else {
         glTexParameteri(_target, GL_TEXTURE_COMPARE_MODE, GL_NONE);
@@ -197,7 +197,7 @@ void GL41Texture::syncSampler() const {
     glTexParameterf(_target, GL_TEXTURE_MIN_LOD, (float)sampler.getMinMip());
     glTexParameterf(_target, GL_TEXTURE_MAX_LOD, (sampler.getMaxMip() == Sampler::MAX_MIP_LEVEL ? 1000.f : sampler.getMaxMip()));
 
-    glTexParameterf(_target, GL_TEXTURE_MAX_ANISOTROPY_EXT, sampler.getMaxAnisotropy());
+    glTexParameterf(_target, GL_TEXTURE_MAX_ANISOTROPY, sampler.getMaxAnisotropy());
 }
 
 using GL41FixedAllocationTexture = GL41Backend::GL41FixedAllocationTexture;
@@ -215,12 +215,29 @@ GL41FixedAllocationTexture::~GL41FixedAllocationTexture() {
 void GL41FixedAllocationTexture::allocateStorage() const {
     const GLTexelFormat texelFormat = GLTexelFormat::evalGLTexelFormat(_gpuObject.getTexelFormat());
     const auto numMips = _gpuObject.getNumMips();
+    const auto numSlices = _gpuObject.getNumSlices();
+    const auto numSamples = _gpuObject.getNumSamples();
 
     // glTextureStorage2D(_id, mips, texelFormat.internalFormat, dimensions.x, dimensions.y);
-    for (GLint level = 0; level < numMips; level++) {
-        Vec3u dimensions = _gpuObject.evalMipDimensions(level);
-        for (GLenum target : getFaceTargets(_target)) {
-            glTexImage2D(target, level, texelFormat.internalFormat, dimensions.x, dimensions.y, 0, texelFormat.format, texelFormat.type, nullptr);
+    if (!_gpuObject.isMultisample()) {
+        for (GLint level = 0; level < numMips; level++) {
+            Vec3u dimensions = _gpuObject.evalMipDimensions(level);
+            for (GLenum target : getFaceTargets(_target)) {
+                if (!_gpuObject.isArray()) {
+                    glTexImage2D(target, level, texelFormat.internalFormat, dimensions.x, dimensions.y, 0, texelFormat.format,
+                                texelFormat.type, nullptr);
+                } else {
+                    glTexImage3D(target, level, texelFormat.internalFormat, dimensions.x, dimensions.y, numSlices, 0,
+                                    texelFormat.format, texelFormat.type, nullptr);
+                }
+            }
+        }
+    } else {
+        const auto dimensions = _gpuObject.getDimensions();
+        if (!_gpuObject.isArray()) {
+            glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, numSamples, texelFormat.internalFormat, dimensions.x, dimensions.y, GL_FALSE);
+        } else {
+            glTexImage3DMultisample(GL_TEXTURE_2D_MULTISAMPLE_ARRAY, numSamples, texelFormat.internalFormat, dimensions.x, dimensions.y, dimensions.z, GL_FALSE);
         }
     }
 
@@ -288,7 +305,6 @@ GL41VariableAllocationTexture::GL41VariableAllocationTexture(const std::weak_ptr
     _maxAllocatedMip = _populatedMip = mipLevels;
     _minAllocatedMip = texture.minAvailableMipLevel();
 
-    uvec3 mipDimensions;
     for (uint16_t mip = _minAllocatedMip; mip < mipLevels; ++mip) {
         if (glm::all(glm::lessThanEqual(texture.evalMipDimensions(mip), INITIAL_MIP_TRANSFER_DIMENSIONS))) {
             _maxAllocatedMip = _populatedMip = mip;

@@ -9,8 +9,10 @@
 #include <QtCore>
 #include <memory>
 #include <glm/glm.hpp>
+#include <glm/gtc/packing.hpp>
 
 #include "GpuHelpers.h"
+#include "GLMHelpers.h"
 
 namespace graphics {
     class Mesh;
@@ -43,8 +45,6 @@ namespace buffer_helpers {
 
     gpu::BufferView clone(const gpu::BufferView& input);
     gpu::BufferView resized(const gpu::BufferView& input, glm::uint32 numElements);
-
-    void packNormalAndTangent(glm::vec3 normal, glm::vec3 tangent, glm::uint32& packedNormal, glm::uint32& packedTangent);
 
     namespace mesh {
         glm::uint32 forEachVertex(const graphics::MeshPointer& mesh, std::function<bool(glm::uint32 index, const QVariantMap& attributes)> func);

@@ -20,11 +20,11 @@
 std::mutex QmlFragmentClass::_mutex;
 std::map<QString, QScriptValue> QmlFragmentClass::_fragments;
 
-QmlFragmentClass::QmlFragmentClass(QString id) : qml(id) { }
+QmlFragmentClass::QmlFragmentClass(bool restricted, QString id) : QmlWindowClass(restricted), qml(id) { }
 
 // Method called by Qt scripts to create a new bottom menu bar in Android
-QScriptValue QmlFragmentClass::constructor(QScriptContext* context, QScriptEngine* engine) {
-
+QScriptValue QmlFragmentClass::internal_constructor(QScriptContext* context, QScriptEngine* engine, bool restricted) {
+#ifndef DISABLE_QML
     std::lock_guard<std::mutex> guard(_mutex);
     auto qml = context->argument(0).toVariant().toMap().value("qml");
     if (qml.isValid()) {
@@ -41,7 +41,7 @@ QScriptValue QmlFragmentClass::constructor(QScriptContext* context, QScriptEngin
 
     auto properties = parseArguments(context);
     auto offscreenUi = DependencyManager::get<OffscreenUi>();
-    QmlFragmentClass* retVal = new QmlFragmentClass(qml.toString());
+    QmlFragmentClass* retVal = new QmlFragmentClass(restricted, qml.toString());
     Q_ASSERT(retVal);
     if (QThread::currentThread() != qApp->thread()) {
         retVal->moveToThread(qApp->thread());
@@ -53,6 +53,9 @@ QScriptValue QmlFragmentClass::constructor(QScriptContext* context, QScriptEngin
     QScriptValue scriptObject = engine->newQObject(retVal);
     _fragments[qml.toString()] = scriptObject;
     return scriptObject;
+#else
+    return QScriptValue();
+#endif
 }
 
 void QmlFragmentClass::close() {
@@ -61,6 +64,7 @@ void QmlFragmentClass::close() {
 }
 
 QObject* QmlFragmentClass::addButton(const QVariant& properties) {
+#ifndef DISABLE_QML
     QVariant resultVar;
     Qt::ConnectionType connectionType = Qt::AutoConnection;
     
@@ -79,8 +83,10 @@ QObject* QmlFragmentClass::addButton(const QVariant& properties) {
         qWarning() << "QmlFragmentClass addButton result not a QObject";
         return NULL;
     }
-    
     return qmlButton;
+#else
+    return nullptr;
+#endif
 }
 
 void QmlFragmentClass::removeButton(QObject* button) {

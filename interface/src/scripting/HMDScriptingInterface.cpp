@@ -27,11 +27,20 @@ HMDScriptingInterface::HMDScriptingInterface() {
     connect(qApp, &Application::activeDisplayPluginChanged, [this]{
         emit displayModeChanged(isHMDMode());
     });
+    connect(qApp, &Application::miniTabletEnabledChanged, [this](bool enabled) {
+        emit miniTabletEnabledChanged(enabled);
+    });
 }
 
 glm::vec3 HMDScriptingInterface::calculateRayUICollisionPoint(const glm::vec3& position, const glm::vec3& direction) const {
     glm::vec3 result;
     qApp->getApplicationCompositor().calculateRayUICollisionPoint(position, direction, result);
+    return result;
+}
+
+glm::vec3 HMDScriptingInterface::calculateParabolaUICollisionPoint(const glm::vec3& position, const glm::vec3& velocity, const glm::vec3& acceleration, float& parabolicDistance) const {
+    glm::vec3 result;
+    qApp->getApplicationCompositor().calculateParabolaUICollisionPoint(position, velocity, acceleration, result, parabolicDistance);
     return result;
 }
 
@@ -113,9 +122,21 @@ void HMDScriptingInterface::toggleShouldShowTablet() {
 }
 
 void HMDScriptingInterface::setShouldShowTablet(bool value) {
-    _showTablet = value;
-    _tabletContextualMode = false;
+    if (_showTablet != value) {
+        _showTablet = value;
+        _tabletContextualMode = false;
+        emit showTabletChanged(value);
+    }
 }
+
+void HMDScriptingInterface::setMiniTabletEnabled(bool enabled) {
+    qApp->setMiniTabletEnabled(enabled);
+}
+
+bool HMDScriptingInterface::getMiniTabletEnabled() {
+    return qApp->getMiniTabletEnabled();
+}
+
 
 QScriptValue HMDScriptingInterface::getHUDLookAtPosition2D(QScriptContext* context, QScriptEngine* engine) {
     glm::vec3 hudIntersection;
@@ -194,4 +215,13 @@ bool HMDScriptingInterface::isKeyboardVisible() {
 
 void HMDScriptingInterface::centerUI() {
     QMetaObject::invokeMethod(qApp, "centerUI", Qt::QueuedConnection);
+}
+
+QVariant HMDScriptingInterface::getPlayAreaRect() {
+    auto rect = qApp->getActiveDisplayPlugin()->getPlayAreaRect();
+    return qRectFToVariant(rect);
+}
+
+QVector<glm::vec3> HMDScriptingInterface::getSensorPositions() {
+    return qApp->getActiveDisplayPlugin()->getSensorPositions();
 }

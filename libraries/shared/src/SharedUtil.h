@@ -80,41 +80,6 @@ const int BYTES_PER_COLOR = 3;
 const int BYTES_PER_FLAGS = 1;
 typedef unsigned char colorPart;
 typedef unsigned char nodeColor[BYTES_PER_COLOR + BYTES_PER_FLAGS];
-typedef unsigned char rgbColor[BYTES_PER_COLOR];
-
-inline QDebug& operator<<(QDebug& dbg, const rgbColor& c) {
-    dbg.nospace() << "{type='rgbColor'"
-        ", red=" << c[0] <<
-        ", green=" << c[1] <<
-        ", blue=" << c[2] <<
-        "}";
-    return dbg;
-}
-
-struct xColor {
-    unsigned char red;
-    unsigned char green;
-    unsigned char blue;
-};
-
-inline QDebug& operator<<(QDebug& dbg, const xColor& c) {
-    dbg.nospace() << "{type='xColor'"
-        ", red=" << c.red <<
-        ", green=" << c.green <<
-        ", blue=" << c.blue <<
-        "}";
-    return dbg;
-}
-
-inline bool operator==(const xColor& lhs, const xColor& rhs)
-{
-    return (lhs.red == rhs.red) && (lhs.green == rhs.green) && (lhs.blue == rhs.blue);
-}
-
-inline bool operator!=(const xColor& lhs, const xColor& rhs)
-{
-    return (lhs.red != rhs.red) || (lhs.green != rhs.green) || (lhs.blue != rhs.blue);
-}
 
 // Use a custom User-Agent to avoid ModSecurity filtering, e.g. by hosting providers.
 const QByteArray HIGH_FIDELITY_USER_AGENT = "Mozilla/5.0 (HighFidelityInterface)";
@@ -148,6 +113,13 @@ void doEvery(quint64& lastReportUsecs, quint64 secs, F lamdba) {
 // Maximum accuracy in msecs
 float secTimestampNow();
 
+// Custom deleter for QObjects that calls deleteLater
+struct LaterDeleter {
+    void operator()(QObject* ptr) {
+        ptr->deleteLater();
+    }
+};
+
 float randFloat();
 int randIntInRange (int min, int max);
 float randFloatInRange (float min,float max);
@@ -163,9 +135,11 @@ void printVoxelCode(unsigned char* voxelCode);
 int numberOfOnes(unsigned char byte);
 bool oneAtBit(unsigned char byte, int bitIndex);
 void setAtBit(unsigned char& byte, int bitIndex);
+bool oneAtBit16(unsigned short word, int bitIndex);
+void setAtBit16(unsigned short& word, int bitIndex);
 void clearAtBit(unsigned char& byte, int bitIndex);
-int  getSemiNibbleAt(unsigned char byte, int bitIndex);
-void setSemiNibbleAt(unsigned char& byte, int bitIndex, int value);
+int  getSemiNibbleAt(unsigned short word, int bitIndex);
+void setSemiNibbleAt(unsigned short& word, int bitIndex, int value);
 
 int getNthBit(unsigned char byte, int ordinal); /// determines the bit placement 0-7 of the ordinal set bit
 

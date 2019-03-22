@@ -30,8 +30,17 @@ const QStringList& FileUtils::getFileSelectors() {
     static std::once_flag once;
     static QStringList extraSelectors;
     std::call_once(once, [] {
+
+#if defined(Q_OS_ANDROID)
+        extraSelectors << "android_" HIFI_ANDROID_APP;
+#endif
+
 #if defined(USE_GLES)
         extraSelectors << "gles";
+#endif
+
+#ifndef Q_OS_ANDROID
+        extraSelectors << "webengine";
 #endif
     });
     return extraSelectors;
@@ -156,10 +165,12 @@ bool FileUtils::canCreateFile(const QString& fullPath) {
         qDebug(shared) << "unable to overwrite file '" << fullPath << "'";
         return false;
     }
-    QDir dir(fileInfo.absolutePath());
+
+    QString absolutePath = fileInfo.absolutePath();
+    QDir dir(absolutePath);
     if (!dir.exists()) {
-        if (!dir.mkpath(fullPath)) {
-            qDebug(shared) << "unable to create dir '" << dir.absolutePath() << "'";
+        if (!dir.mkpath(absolutePath)) {
+            qDebug(shared) << "unable to create dir '" << absolutePath << "'";
             return false;
         }
     }

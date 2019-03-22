@@ -33,19 +33,6 @@
 #include "entities/EntityTreeHeadlessViewer.h"
 #include "avatars/ScriptableAvatar.h"
 
-/**jsdoc
- * @namespace Agent
- *
- * @hifi-assignment-client
- *
- * @property {boolean} isAvatar
- * @property {boolean} isPlayingAvatarSound <em>Read-only.</em>
- * @property {boolean} isListeningToAudioStream
- * @property {boolean} isNoiseGateEnabled
- * @property {number} lastReceivedAudioLoudness <em>Read-only.</em>
- * @property {Uuid} sessionUUID <em>Read-only.</em>
- */
-
 class Agent : public ThreadedAssignment {
     Q_OBJECT
 
@@ -73,29 +60,14 @@ public:
     virtual void aboutToFinish() override;
 
 public slots:
-    /**jsdoc
-     * @function Agent.run
-     * @deprecated This function is being removed from the API.
-     */
     void run() override;
 
-    /**jsdoc
-     * @function Agent.playAvatarSound
-     * @param {object} avatarSound
-     */
     void playAvatarSound(SharedSoundPointer avatarSound);
-    
-    /**jsdoc
-     * @function Agent.setIsAvatar
-     * @param {boolean} isAvatar
-     */
-    void setIsAvatar(bool isAvatar);
 
-    /**jsdoc
-     * @function Agent.isAvatar
-     * @returns {boolean}
-     */
+    void setIsAvatar(bool isAvatar);
     bool isAvatar() const { return _isAvatar; }
+
+    Q_INVOKABLE virtual void stop() override;
 
 private slots:
     void requestScript();
@@ -109,7 +81,6 @@ private slots:
     void nodeActivated(SharedNodePointer activatedNode);
     void nodeKilled(SharedNodePointer killedNode);
 
-    void processAgentAvatar();
     void processAgentAvatarAudio();
 
 private:
@@ -127,7 +98,6 @@ private:
 
     void setAvatarSound(SharedSoundPointer avatarSound) { _avatarSound = avatarSound; }
 
-    void sendAvatarIdentityPacket();
     void queryAvatars();
 
     QString _scriptContents;
@@ -135,9 +105,9 @@ private:
     ResourceRequest* _pendingScriptRequest { nullptr };
     bool _isListeningToAudioStream = false;
     SharedSoundPointer _avatarSound;
+    bool _shouldMuteRecordingAudio { false };
     int _numAvatarSoundSentBytes = 0;
     bool _isAvatar = false;
-    QTimer* _avatarIdentityTimer = nullptr;
     QTimer* _avatarQueryTimer = nullptr;
     QHash<QUuid, quint16> _outgoingScriptAudioSequenceNumbers;
 

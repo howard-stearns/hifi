@@ -15,10 +15,12 @@
 #include <QtQml/QQmlEngine>
 
 #include <QtGui/QOpenGLContext>
+#include <QPointer>
 
 #include <NumericalConstants.h>
 #include <shared/NsightHelpers.h>
 #include <gl/QOpenGLContextWrapper.h>
+#include <gl/GLHelpers.h>
 
 #include "../OffscreenSurface.h"
 #include "../Logging.h"
@@ -55,6 +57,8 @@ QOpenGLContext* SharedObject::getSharedContext() {
 }
 
 SharedObject::SharedObject() {
+#ifndef DISABLE_QML
+
     // Create render control
     _renderControl = new RenderControl();
 
@@ -65,9 +69,11 @@ SharedObject::SharedObject() {
     //       so we wait until after its ctor to move object/context to this thread.
     QQuickWindow::setDefaultAlphaBuffer(true);
     _quickWindow = new QQuickWindow(_renderControl);
+    _quickWindow->setFormat(getDefaultOpenGLSurfaceFormat());
     _quickWindow->setColor(QColor(255, 255, 255, 0));
     _quickWindow->setClearBeforeRendering(true);
 
+#endif
 
     QObject::connect(qApp, &QCoreApplication::aboutToQuit, this, &SharedObject::onAboutToQuit);
 }
@@ -78,7 +84,7 @@ SharedObject::~SharedObject() {
     destroy();
 
     // _renderTimer is created with `this` as the parent, so need no explicit destruction
-
+#ifndef DISABLE_QML
     // Destroy the event hand
     if (_renderObject) {
         delete _renderObject;
@@ -89,18 +95,29 @@ SharedObject::~SharedObject() {
         delete _renderControl;
         _renderControl = nullptr;
     }
+#endif
+
+    // already deleted objects will be reset to null by QPointer so it should be safe just iterate here
+    for (auto qmlObject : _deletionList) {
+        if (qmlObject) {
+            // manually delete not-deleted-yet qml items
+            QQmlEngine::setObjectOwnership(qmlObject, QQmlEngine::CppOwnership);
+            delete qmlObject;
+        }
+    }
 
     if (_rootItem) {
         delete _rootItem;
         _rootItem = nullptr;
     }
 
+#ifndef DISABLE_QML
     if (_quickWindow) {
         _quickWindow->destroy();
         delete _quickWindow;
         _quickWindow = nullptr;
     }
-
+#endif
     if (_qmlContext) {
         auto engine = _qmlContext->engine();
         delete _qmlContext;
@@ -114,7 +131,9 @@ void SharedObject::create(OffscreenSurface* surface) {
         qFatal("QML surface root item already set");
     }
 
+#ifndef DISABLE_QML
     QObject::connect(_quickWindow, &QQuickWindow::focusObjectChanged, surface, &OffscreenSurface::onFocusObjectChanged);
+#endif
 
     // Create a QML engine.
     auto qmlEngine = acquireEngine(surface);
@@ -125,10 +144,12 @@ void SharedObject::create(OffscreenSurface* surface) {
     surface->onRootContextCreated(_qmlContext);
     emit surface->rootContextCreated(_qmlContext);
 
+#ifndef DISABLE_QML
     if (!qmlEngine->incubationController()) {
         qmlEngine->setIncubationController(_quickWindow->incubationController());
     }
     _qmlContext->setContextProperty("offscreenWindow", QVariant::fromValue(_quickWindow));
+#endif
 }
 
 void SharedObject::setRootItem(QQuickItem* rootItem) {
@@ -137,6 +158,7 @@ void SharedObject::setRootItem(QQuickItem* rootItem) {
     }
 
     _rootItem = rootItem;
+#ifndef DISABLE_QML
     _rootItem->setSize(_quickWindow->size());
 
     // Create the render thread
@@ -150,6 +172,8 @@ void SharedObject::setRootItem(QQuickItem* rootItem) {
 
     QObject::connect(_renderControl, &QQuickRenderControl::renderRequested, this, &SharedObject::requestRender);
     QObject::connect(_renderControl, &QQuickRenderControl::sceneChanged, this, &SharedObject::requestRenderSync);
+#endif
+
 }
 
 void SharedObject::destroy() {
@@ -163,6 +187,7 @@ void SharedObject::destroy() {
     }
 
     _paused = true;
+#ifndef DISABLE_QML
     if (_renderTimer) {
         _renderTimer->stop();
         QObject::disconnect(_renderTimer);
@@ -171,9 +196,11 @@ void SharedObject::destroy() {
     if (_renderControl) {
         QObject::disconnect(_renderControl);
     }
+#endif
 
     QObject::disconnect(qApp);
 
+#ifndef DISABLE_QML
     {
         QMutexLocker lock(&_mutex);
         _quit = true;
@@ -190,6 +217,7 @@ void SharedObject::destroy() {
         delete _renderThread;
         _renderThread = nullptr;
     }
+#endif
 }
 
 
@@ -240,6 +268,7 @@ void SharedObject::releaseEngine(QQmlEngine* engine) {
 }
 
 bool SharedObject::event(QEvent* e) {
+#ifndef DISABLE_QML
     switch (static_cast<OffscreenEvent::Type>(e->type())) {
         case OffscreenEvent::Initialize:
             onInitialize();
@@ -252,6 +281,7 @@ bool SharedObject::event(QEvent* e) {
         default:
             break;
     }
+#endif
     return QObject::event(e);
 }
 
@@ -261,22 +291,28 @@ void SharedObject::initializeRenderControl(QOpenGLContext* context) {
         qFatal("QML rendering context has no share context");
     }
 
+#ifndef DISABLE_QML
     if (!nsightActive()) {
         _renderControl->initialize(context);
     }
+#endif
 }
 
 void SharedObject::releaseTextureAndFence() {
+#ifndef DISABLE_QML
     QMutexLocker lock(&_mutex);
     // If the most recent texture was unused, we can directly recycle it
     if (_latestTextureAndFence.first) {
         getTextureCache().releaseTexture(_latestTextureAndFence);
         _latestTextureAndFence = TextureAndFence{ 0, 0 };
     }
+#endif
 }
 
 void SharedObject::setRenderTarget(uint32_t fbo, const QSize& size) {
+#ifndef DISABLE_QML
     _quickWindow->setRenderTarget(fbo, size);
+#endif
 }
 
 QSize SharedObject::getSize() const {
@@ -295,6 +331,7 @@ void SharedObject::setSize(const QSize& size) {
     }
 
     qCDebug(qmlLogging) << "Offscreen UI resizing to " << size.width() << "x" << size.height();
+#ifndef DISABLE_QML
     _quickWindow->setGeometry(QRect(QPoint(), size));
     _quickWindow->contentItem()->setSize(size);
 
@@ -304,9 +341,11 @@ void SharedObject::setSize(const QSize& size) {
     }
 
     requestRenderSync();
+#endif
 }
 
 bool SharedObject::preRender() {
+#ifndef DISABLE_QML
     QMutexLocker lock(&_mutex);
     if (_paused) {
         if (_syncRequested) {
@@ -327,6 +366,7 @@ bool SharedObject::preRender() {
         }
         _syncRequested = false;
     }
+#endif
 
     return true;
 }
@@ -339,8 +379,10 @@ void SharedObject::shutdownRendering(OffscreenGLCanvas& canvas, const QSize& siz
             getTextureCache().releaseTexture(_latestTextureAndFence);
         }
     }
+#ifndef DISABLE_QML
     _renderControl->invalidate();
     canvas.doneCurrent();
+#endif
     wake();
 }
 
@@ -380,9 +422,16 @@ bool SharedObject::fetchTexture(TextureAndFence& textureAndFence) {
     return true;
 }
 
+void hifi::qml::impl::SharedObject::addToDeletionList(QObject * object)
+{
+    _deletionList.append(QPointer<QObject>(object));
+}
+
 void SharedObject::setProxyWindow(QWindow* window) {
+#ifndef DISABLE_QML
     _proxyWindow = window;
     _renderControl->setRenderWindow(window);
+#endif
 }
 
 void SharedObject::wait() {
@@ -394,6 +443,7 @@ void SharedObject::wake() {
 }
 
 void SharedObject::onInitialize() {
+#ifndef DISABLE_QML
     // Associate root item with the window.
     _rootItem->setParentItem(_quickWindow->contentItem());
     _renderControl->prepareThread(_renderThread);
@@ -410,9 +460,11 @@ void SharedObject::onInitialize() {
     _renderTimer->setTimerType(Qt::PreciseTimer);
     _renderTimer->setInterval(MIN_TIMER_MS);  // 5ms, Qt::PreciseTimer required
     _renderTimer->start();
+#endif
 }
 
 void SharedObject::onRender() {
+#ifndef DISABLE_QML
     PROFILE_RANGE(render_qml, __FUNCTION__);
     if (_quit) {
         return;
@@ -430,6 +482,7 @@ void SharedObject::onRender() {
         QCoreApplication::postEvent(_renderObject, new OffscreenEvent(OffscreenEvent::Render));
     }
     _renderRequested = false;
+#endif
 }
 
 void SharedObject::onTimer() {
@@ -447,6 +500,9 @@ void SharedObject::onTimer() {
     }
 
     {
+        if (_maxFps == 0) {
+            return;
+        }
         auto minRenderInterval = USECS_PER_SECOND / _maxFps;
         auto lastInterval = usecTimestampNow() - _lastRenderTime;
         // Don't exceed the framerate limit
@@ -455,7 +511,9 @@ void SharedObject::onTimer() {
         }
     }
 
+#ifndef DISABLE_QML
     QCoreApplication::postEvent(this, new OffscreenEvent(OffscreenEvent::Render));
+#endif
 }
 
 void SharedObject::onAboutToQuit() {

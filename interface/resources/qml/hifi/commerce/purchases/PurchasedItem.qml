@@ -13,10 +13,11 @@
 
 import Hifi 1.0 as Hifi
 import QtQuick 2.5
+import QtGraphicalEffects 1.0
 import QtQuick.Controls 1.4
 import QtQuick.Controls.Styles 1.4
-import "../../../styles-uit"
-import "../../../controls-uit" as HifiControlsUit
+import stylesUit 1.0
+import controlsUit 1.0 as HifiControlsUit
 import "../../../controls" as HifiControls
 import "../wallet" as HifiWallet
 import TabletScriptingInterface 1.0
@@ -28,6 +29,7 @@ Item {
     property string purchaseStatus;
     property string itemName;
     property string itemId;
+    property string updateItemId;
     property string itemPreviewImageUrl;
     property string itemHref;
     property string certificateId;
@@ -45,11 +47,12 @@ Item {
     property bool cardBackVisible;
     property bool isInstalled;
     property string wornEntityID;
-    property string upgradeUrl;
+    property string updatedItemId;
     property string upgradeTitle;
-    property bool updateAvailable: root.upgradeUrl !== "" && !root.isShowingMyItems;
-    property bool isShowingMyItems;
+    property bool updateAvailable: root.updateItemId !== "";
     property bool valid;
+    property bool standaloneOptimized;
+    property bool standaloneIncompatible;
 
     property string originalStatusText;
     property string originalStatusColor;
@@ -59,7 +62,7 @@ Item {
 
     Connections {
         target: Commerce;
-        
+
         onContentSetChanged: {
             if (contentSetHref === root.itemHref) {
                 showConfirmation = true;
@@ -67,13 +70,13 @@ Item {
         }
 
         onAppInstalled: {
-            if (appHref === root.itemHref) {
+            if (appID === root.itemId) {
                 root.isInstalled = true;
             }
         }
 
         onAppUninstalled: {
-            if (appHref === root.itemHref) {
+            if (appID === root.itemId) {
                 root.isInstalled = false;
             }
         }
@@ -135,7 +138,7 @@ Item {
                 anchors.topMargin: 8;
                 width: 30;
                 height: width;
-            
+
                 HiFiGlyphs {
                     id: closeContextMenuGlyph;
                     text: hifi.glyphs.close;
@@ -163,7 +166,6 @@ Item {
 
             Rectangle {
                 id: contextCard;
-                z: 2;
                 anchors.left: parent.left;
                 anchors.leftMargin: 30;
                 anchors.top: parent.top;
@@ -177,7 +179,8 @@ Item {
 
                     Item {
                         property alias buttonGlyphText: buttonGlyph.text;
-                        property alias buttonText: buttonText.text;
+                        property alias itemButtonText: buttonText.text;
+                        property alias glyphSize: buttonGlyph.size;
                         property string buttonColor: hifi.colors.black;
                         property string buttonColor_hover: hifi.colors.blueHighlight;
                         property alias enabled: buttonMouseArea.enabled;
@@ -188,7 +191,8 @@ Item {
                             anchors.top: parent.top;
                             anchors.topMargin: 4;
                             anchors.horizontalCenter: parent.horizontalCenter;
-                            anchors.bottom: parent.verticalCenter;
+                            anchors.bottom: buttonText.visible ? parent.verticalCenter : parent.bottom;
+                            anchors.bottomMargin: buttonText.visible ? 0 : 4;
                             width: parent.width;
                             size: 40;
                             horizontalAlignment: Text.AlignHCenter;
@@ -198,6 +202,7 @@ Item {
 
                         RalewayRegular {
                             id: buttonText;
+                            visible: text !== "";
                             anchors.top: parent.verticalCenter;
                             anchors.topMargin: 4;
                             anchors.bottom: parent.bottom;
@@ -232,7 +237,7 @@ Item {
 
                 Loader {
                     id: giftButton;
-                    visible: !root.isShowingMyItems;
+                    visible: root.itemEdition > 0;
                     sourceComponent: contextCardButton;
                     anchors.right: parent.right;
                     anchors.top: parent.top;
@@ -242,7 +247,7 @@ Item {
                     onLoaded: {
                         item.enabled = root.valid;
                         item.buttonGlyphText = hifi.glyphs.gift;
-                        item.buttonText = "Gift";
+                        item.itemButtonText = "Gift";
                         item.buttonClicked = function() {
                             sendToPurchases({ method: 'flipCard', closeAll: true });
                             sendToPurchases({
@@ -269,7 +274,7 @@ Item {
 
                     onLoaded: {
                         item.buttonGlyphText = hifi.glyphs.market;
-                        item.buttonText = "View in Marketplace";
+                        item.itemButtonText = "View in Marketplace";
                         item.buttonClicked = function() {
                             sendToPurchases({ method: 'flipCard', closeAll: true });
                             sendToPurchases({method: 'purchases_itemInfoClicked', itemId: root.itemId});
@@ -287,7 +292,7 @@ Item {
 
                     onLoaded: {
                         item.buttonGlyphText = hifi.glyphs.certificate;
-                        item.buttonText = "View Certificate";
+                        item.itemButtonText = "View Certificate";
                         item.buttonClicked = function() {
                             sendToPurchases({ method: 'flipCard', closeAll: true });
                             sendToPurchases({method: 'purchases_itemCertificateClicked', itemCertificateId: root.certificateId});
@@ -302,15 +307,19 @@ Item {
                     anchors.right: certificateButton.left;
                     anchors.top: parent.top;
                     anchors.bottom: parent.bottom;
-                    width: 78;
+                    width: 72;
 
                     onLoaded: {
                         item.buttonGlyphText = hifi.glyphs.uninstall;
-                        item.buttonText = "Uninstall";
+                        item.itemButtonText = "Uninstall";
                         item.buttonClicked = function() {
                             sendToPurchases({ method: 'flipCard', closeAll: true });
                             Commerce.uninstallApp(root.itemHref);
                         }
+                    }
+
+                    onVisibleChanged: {
+                        trashButton.updateProperties();
                     }
                 }
 
@@ -321,15 +330,62 @@ Item {
                     anchors.right: uninstallButton.visible ? uninstallButton.left : certificateButton.left;
                     anchors.top: parent.top;
                     anchors.bottom: parent.bottom;
-                    width: 84;
+                    width: 78;
 
                     onLoaded: {
                         item.buttonGlyphText = hifi.glyphs.update;
-                        item.buttonText = "Update";
+                        item.itemButtonText = "Update";
                         item.buttonColor = "#E2334D";
                         item.buttonClicked = function() {
                             sendToPurchases({ method: 'flipCard', closeAll: true });
-                            sendToPurchases({method: 'updateItemClicked', itemId: root.itemId, itemEdition: root.itemEdition, upgradeUrl: root.upgradeUrl});
+                            sendToPurchases({
+                                method: 'updateItemClicked',
+                                itemId: root.updateAvailable ? root.updateItemId : root.itemId,
+                                itemEdition: root.itemEdition,
+                                itemHref: root.itemHref,
+                                itemType: root.itemType,
+                                isInstalled: root.isInstalled,
+                                wornEntityID: root.wornEntityID
+                            });
+                        }
+                    }
+
+                    onVisibleChanged: {
+                        trashButton.updateProperties();
+                    }
+                }
+
+                Loader {
+                    id: trashButton;
+                    visible: root.itemEdition > 0;
+                    sourceComponent: contextCardButton;
+                    anchors.right: updateButton.visible ? updateButton.left : (uninstallButton.visible ? uninstallButton.left : certificateButton.left);
+                    anchors.top: parent.top;
+                    anchors.bottom: parent.bottom;
+                    width: (updateButton.visible && uninstallButton.visible) ? 15 : 78;
+
+                    onLoaded: {
+                        item.buttonGlyphText = hifi.glyphs.trash;
+                        updateProperties();
+                        item.buttonClicked = function() {
+                            sendToPurchases({method: 'showTrashLightbox',
+                                isInstalled: root.isInstalled,
+                                itemHref: root.itemHref,
+                                itemName: root.itemName,
+                                certID: root.certificateId,
+                                itemType: root.itemType,
+                                wornEntityID: root.wornEntityID
+                            });
+                        }
+                    }
+
+                    function updateProperties() {
+                        if (updateButton.visible && uninstallButton.visible) {
+                            item.itemButtonText = "";
+                            item.glyphSize = 20;
+                        } else if (item) {
+                            item.itemButtonText = "Send to Trash";
+                            item.glyphSize = 30;
                         }
                     }
                 }
@@ -337,7 +393,7 @@ Item {
 
             Rectangle {
                 id: permissionExplanationCard;
-                z: 1;
+                visible: false;
                 anchors.left: parent.left;
                 anchors.leftMargin: 30;
                 anchors.top: parent.top;
@@ -350,7 +406,9 @@ Item {
                     id: permissionExplanationText;
                     anchors.fill: parent;
                     text: {
-                        if (root.itemType === "contentSet") {
+                        if (root.standaloneIncompatible) {
+                            "This item is incompatible with stand-alone devices. <a href='#standaloneIncompatible'>Learn more</a>";
+                        } else if (root.itemType === "contentSet") {
                             "You do not have 'Replace Content' permissions in this domain. <a href='#replaceContentPermission'>Learn more</a>";
                         } else if (root.itemType === "entity") {
                             "You do not have 'Rez Certified' permissions in this domain. <a href='#rezCertifiedPermission'>Learn more</a>";
@@ -364,12 +422,16 @@ Item {
                     verticalAlignment: Text.AlignVCenter;
 
                     onLinkActivated: {
-                        sendToPurchases({method: 'showPermissionsExplanation', itemType: root.itemType});
+                        if (link === "#standaloneIncompatible") {
+                            sendToPurchases({method: 'showStandaloneIncompatibleExplanation'});                            
+                        } else {
+                            sendToPurchases({method: 'showPermissionsExplanation', itemType: root.itemType});
+                        }
                     }
                 }
             }
         }
-        
+
         transform: Rotation {
             id: rotation;
             origin.x: flipable.width/2;
@@ -502,7 +564,7 @@ Item {
                     }
                 verticalAlignment: Text.AlignTop;
             }
-        
+
             HiFiGlyphs {
                 id: statusIcon;
                 text: {
@@ -581,7 +643,7 @@ Item {
                 border.width: 1;
                 border.color: "#E2334D";
             }
-            
+
             HiFiGlyphs {
                 id: contextMenuGlyph;
                 text: hifi.glyphs.verticalEllipsis;
@@ -596,8 +658,8 @@ Item {
                 anchors.fill: parent;
                 hoverEnabled: enabled;
                 onClicked: {
-                    contextCard.z = 1;
-                    permissionExplanationCard.z = 0;
+                    contextCard.visible = true;
+                    permissionExplanationCard.visible = false;
                     root.sendToPurchases({ method: 'flipCard' });
                 }
                 onEntered: {
@@ -608,7 +670,7 @@ Item {
                 }
             }
         }
-        
+
         Rectangle {
             id: rezzedNotifContainer;
             z: 998;
@@ -646,8 +708,10 @@ Item {
             anchors.bottomMargin: 8;
             width: 160;
             height: 40;
-            enabled: root.hasPermissionToRezThis &&
+            enabled: !root.standaloneIncompatible && 
+                root.hasPermissionToRezThis &&
                 MyAvatar.skeletonModelURL !== root.itemHref &&
+                !root.wornEntityID &&
                 root.valid;
 
             onHoveredChanged: {
@@ -655,13 +719,13 @@ Item {
                     Tablet.playSound(TabletEnums.ButtonHover);
                 }
             }
-    
+
             onFocusChanged: {
                 if (focus) {
                     Tablet.playSound(TabletEnums.ButtonHover);
                 }
             }
-            
+
             onClicked: {
                 Tablet.playSound(TabletEnums.ButtonClick);
                 if (root.itemType === "contentSet") {
@@ -724,7 +788,7 @@ Item {
                     }
                     HiFiGlyphs {
                         id: rezIcon;
-                        text: (root.buttonGlyph)[itemTypesArray.indexOf(root.itemType)];
+                        text: root.isInstalled ? "" : (root.buttonGlyph)[itemTypesArray.indexOf(root.itemType)];
                         anchors.right: rezIconLabel.left;
                         anchors.rightMargin: 2;
                         anchors.verticalCenter: parent.verticalCenter;
@@ -767,7 +831,7 @@ Item {
             // Style
             color: hifi.colors.redAccent;
             horizontalAlignment: Text.AlignRight;
-            
+
             MouseArea {
                 anchors.fill: parent;
                 hoverEnabled: true;
@@ -779,11 +843,33 @@ Item {
                     noPermissionGlyph.color = hifi.colors.redAccent;
                 }
                 onClicked: {
-                    contextCard.z = 0;
-                    permissionExplanationCard.z = 1;
+                    contextCard.visible = false;
+                    permissionExplanationCard.visible = true;
                     root.sendToPurchases({ method: 'flipCard' });
                 }
             }
+        } 
+        Image {
+            id: standaloneOptomizedBadge
+
+            anchors {
+                right: parent.right
+                bottom: parent.bottom
+                rightMargin: 15
+                bottomMargin:12
+            }
+            height: root.standaloneOptimized ? 36 : 0
+            width: 36
+            
+            visible: root.standaloneOptimized
+            fillMode: Image.PreserveAspectFit
+            source: "../../../../icons/standalone-optimized.svg"
+        }
+        ColorOverlay {
+            anchors.fill: standaloneOptomizedBadge
+            source: standaloneOptomizedBadge
+            color: hifi.colors.blueHighlight
+            visible: root.standaloneOptimized
         }
     }
 

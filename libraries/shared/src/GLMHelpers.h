@@ -24,6 +24,7 @@ using glm::ivec2;
 using glm::ivec3;
 using glm::ivec4;
 using glm::uvec2;
+using glm::u8vec3;
 using glm::uvec3;
 using glm::uvec4;
 using glm::mat3;
@@ -174,12 +175,10 @@ bool isSimilarPosition(const glm::vec3& positionA, const glm::vec3& positionB, f
 uvec2 toGlm(const QSize& size);
 ivec2 toGlm(const QPoint& pt);
 vec2 toGlm(const QPointF& pt);
-vec3 toGlm(const xColor& color);
+vec3 toGlm(const glm::u8vec3& color);
 vec4 toGlm(const QColor& color);
 ivec4 toGlm(const QRect& rect);
-vec4 toGlm(const xColor& color, float alpha);
-
-xColor xColorFromGlm(const glm::vec3 & c);
+vec4 toGlm(const glm::u8vec3& color, float alpha);
 
 QSize fromGlm(const glm::ivec2 & v);
 QMatrix4x4 fromGlm(const glm::mat4 & m);
@@ -250,7 +249,10 @@ glm::vec3 transformVectorFull(const glm::mat4& m, const glm::vec3& v);
 void generateBasisVectors(const glm::vec3& primaryAxis, const glm::vec3& secondaryAxis,
                           glm::vec3& uAxisOut, glm::vec3& vAxisOut, glm::vec3& wAxisOut);
 
+// assumes z-forward and y-up
 glm::vec2 getFacingDir2D(const glm::quat& rot);
+
+// assumes z-forward and y-up
 glm::vec2 getFacingDir2D(const glm::mat4& m);
 
 inline bool isNaN(const glm::vec3& value) { return isNaN(value.x) || isNaN(value.y) || isNaN(value.z); }
@@ -310,6 +312,55 @@ inline void glm_mat4u_mul(const glm::mat4& m1, const glm::mat4& m2, glm::mat4& r
     _mm_storeu_ps((float*)&r[3][0], v3);
 #else
     r = m1 * m2;
+#endif
+}
+
+//
+// Fast replacement of glm::packSnorm3x10_1x2()
+// The SSE2 version quantizes using round to nearest even.
+// The glm version quantizes using round away from zero.
+//
+inline uint32_t glm_packSnorm3x10_1x2(vec4 const& v) {
+
+    union i10i10i10i2 {
+        struct {
+            int x : 10;
+            int y : 10;
+            int z : 10;
+            int w : 2;
+        } data;
+        uint32_t pack;
+    } Result;
+
+#if GLM_ARCH & GLM_ARCH_SSE2_BIT
+    __m128 vclamp = _mm_min_ps(_mm_max_ps(_mm_loadu_ps((float*)&v[0]), _mm_set1_ps(-1.0f)), _mm_set1_ps(1.0f));
+    __m128i vpack = _mm_cvtps_epi32(_mm_mul_ps(vclamp, _mm_setr_ps(511.f, 511.f, 511.f, 1.f)));
+
+    Result.data.x = _mm_cvtsi128_si32(vpack);
+    Result.data.y = _mm_cvtsi128_si32(_mm_shuffle_epi32(vpack, _MM_SHUFFLE(1,1,1,1)));
+    Result.data.z = _mm_cvtsi128_si32(_mm_shuffle_epi32(vpack, _MM_SHUFFLE(2,2,2,2)));
+    Result.data.w = _mm_cvtsi128_si32(_mm_shuffle_epi32(vpack, _MM_SHUFFLE(3,3,3,3)));
+#else
+    ivec4 const Pack(round(clamp(v, -1.0f, 1.0f) * vec4(511.f, 511.f, 511.f, 1.f)));
+
+    Result.data.x = Pack.x;
+    Result.data.y = Pack.y;
+    Result.data.z = Pack.z;
+    Result.data.w = Pack.w;
+#endif
+    return Result.pack;
+}
+
+// convert float to int, using round-to-nearest-even (undefined on overflow)
+inline int fastLrintf(float x) {
+#if GLM_ARCH & GLM_ARCH_SSE2_BIT
+    return _mm_cvt_ss2si(_mm_set_ss(x));
+#else
+    // return lrintf(x);
+    static_assert(std::numeric_limits<double>::is_iec559, "Requires IEEE-754 double precision format");
+    union { double d; int64_t i; } bits = { (double)x };
+    bits.d += (3ULL << 51);
+    return (int)bits.i;
 #endif
 }
 

@@ -89,31 +89,19 @@ namespace controller {
 
     float ScriptingInterface::getValue(const int& source) const {
         auto userInputMapper = DependencyManager::get<UserInputMapper>();
-        return userInputMapper->getValue(Input((uint32_t)source));
-    }
-
-    float ScriptingInterface::getButtonValue(StandardButtonChannel source, uint16_t device) const {
-        return getValue(Input(device, source, ChannelType::BUTTON).getID());
+        return userInputMapper->getValue(Input((uint32_t)source)).value;
     }
 
     float ScriptingInterface::getAxisValue(int source) const {
         auto userInputMapper = DependencyManager::get<UserInputMapper>();
-        return userInputMapper->getValue(Input((uint32_t)source));
-    }
-
-    float ScriptingInterface::getAxisValue(StandardAxisChannel source, uint16_t device) const {
-        return getValue(Input(device, source, ChannelType::AXIS).getID());
+        return userInputMapper->getValue(Input((uint32_t)source)).value;
     }
 
     Pose ScriptingInterface::getPoseValue(const int& source) const {
         auto userInputMapper = DependencyManager::get<UserInputMapper>();
-        return userInputMapper->getPose(Input((uint32_t)source)); 
+        return userInputMapper->getPose(Input((uint32_t)source));
     }
     
-    Pose ScriptingInterface::getPoseValue(StandardPoseChannel source, uint16_t device) const {
-        return getPoseValue(Input(device, source, ChannelType::POSE).getID());
-    }
-
     QVector<Action> ScriptingInterface::getAllActions() {
         return DependencyManager::get<UserInputMapper>()->getAllActions();
     }
@@ -188,6 +176,17 @@ namespace controller {
     QString ScriptingInterface::getInputRecorderSaveDirectory() {
         InputRecorder* inputRecorder = InputRecorder::getInstance();
         return inputRecorder->getSaveDirectory();
+    }
+
+    QStringList ScriptingInterface::getRunningInputDeviceNames() {
+        QMutexLocker locker(&_runningDevicesMutex);
+        return _runningInputDeviceNames;
+    }
+
+    void ScriptingInterface::updateRunningInputDevices(const QString& deviceName, bool isRunning, const QStringList& runningDevices) {
+        QMutexLocker locker(&_runningDevicesMutex);
+        _runningInputDeviceNames = runningDevices;
+        emit inputDeviceRunningChanged(deviceName, isRunning);
     }
 
     bool ScriptingInterface::triggerHapticPulseOnDevice(unsigned int device, float strength, float duration, controller::Hand hand) const {

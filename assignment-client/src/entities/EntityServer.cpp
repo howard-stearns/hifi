@@ -23,7 +23,9 @@
 #include <EntityEditFilters.h>
 #include <NetworkingConstants.h>
 #include <AddressManager.h>
+#include <hfm/ModelFormatRegistry.h>
 
+#include "../AssignmentDynamicFactory.h"
 #include "AssignmentParentFinder.h"
 #include "EntityNodeData.h"
 #include "EntityServerConsts.h"
@@ -41,6 +43,11 @@ EntityServer::EntityServer(ReceivedMessage& message) :
     DependencyManager::set<ResourceManager>();
     DependencyManager::set<ResourceCacheSharedItems>();
     DependencyManager::set<ScriptCache>();
+
+    DependencyManager::registerInheritance<EntityDynamicFactoryInterface, AssignmentDynamicFactory>();
+    DependencyManager::set<AssignmentDynamicFactory>();
+    DependencyManager::set<ModelFormatRegistry>(); // ModelFormatRegistry must be defined before ModelCache. See the ModelCache ctor
+    DependencyManager::set<ModelCache>();
 
     auto& packetReceiver = DependencyManager::get<NodeList>()->getPacketReceiver();
     packetReceiver.registerListenerForTypes({ PacketType::EntityAdd,
@@ -70,6 +77,8 @@ EntityServer::~EntityServer() {
 
 void EntityServer::aboutToFinish() {
     DependencyManager::get<ResourceManager>()->cleanup();
+
+    DependencyManager::destroy<AssignmentDynamicFactory>();
 
     OctreeServer::aboutToFinish();
 }
@@ -504,6 +513,11 @@ void EntityServer::startDynamicDomainVerification() {
                         QString thisDomainID = DependencyManager::get<AddressManager>()->getDomainID().remove(QRegExp("\\{|\\}"));
                         if (jsonObject["domain_id"].toString() != thisDomainID) {
                             EntityItemPointer entity = tree->findEntityByEntityItemID(entityID);
+                            if (!entity) {
+                                qCDebug(entities) << "Entity undergoing dynamic domain verification is no longer available:" << entityID;
+                                networkReply->deleteLater();
+                                return;
+                            }
                             if (entity->getAge() > (_MAXIMUM_DYNAMIC_DOMAIN_VERIFICATION_TIMER_MS/MSECS_PER_SECOND)) {
                                 qCDebug(entities) << "Entity's cert's domain ID" << jsonObject["domain_id"].toString()
                                                 << "doesn't match the current Domain ID" << thisDomainID << "; deleting entity" << entityID;
@@ -517,11 +531,8 @@ void EntityServer::startDynamicDomainVerification() {
                             qCDebug(entities) << "Entity passed dynamic domain verification:" << entityID;
                         }
                     } else {
-                        qCDebug(entities) << "Call to" << networkReply->url() << "failed with error" << networkReply->error() << "; deleting entity" << entityID
+                        qCDebug(entities) << "Call to" << networkReply->url() << "failed with error" << networkReply->error() << "; NOT deleting entity" << entityID
                             << "More info:" << jsonObject;
-                        tree->withWriteLock([&] {
-                            tree->deleteEntity(entityID, true);
-                        });
                     }
 
                     networkReply->deleteLater();

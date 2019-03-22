@@ -58,7 +58,8 @@ inline QString motionTypeToString(PhysicsMotionType motionType) {
 enum MotionStateType {
     MOTIONSTATE_TYPE_INVALID,
     MOTIONSTATE_TYPE_ENTITY,
-    MOTIONSTATE_TYPE_AVATAR
+    MOTIONSTATE_TYPE_AVATAR,
+    MOTIONSTATE_TYPE_DETAILED
 };
 
 // The update flags trigger two varieties of updates: "hard" which require the body to be pulled
@@ -110,7 +111,7 @@ public:
     MotionStateType getType() const { return _type; }
     virtual PhysicsMotionType getMotionType() const { return _motionType; }
 
-    void setMass(float mass);
+    virtual void setMass(float mass);
     virtual float getMass() const;
 
     void setBodyLinearVelocity(const glm::vec3& velocity) const;
@@ -160,11 +161,13 @@ public:
 
     bool hasInternalKinematicChanges() const { return _hasInternalKinematicChanges; }
 
-    void dirtyInternalKinematicChanges() { _hasInternalKinematicChanges = true; }
-    void clearInternalKinematicChanges() { _hasInternalKinematicChanges = false; }
+    // these methods are declared const so they can be called inside other const methods
+    void dirtyInternalKinematicChanges() const { _hasInternalKinematicChanges = true; }
+    void clearInternalKinematicChanges() const { _hasInternalKinematicChanges = false; }
 
     virtual bool isLocallyOwned() const { return false; }
     virtual bool isLocallyOwnedOrShouldBe() const { return false; } // aka shouldEmitCollisionEvents()
+    virtual void saveKinematicState(btScalar timeStep);
 
     friend class PhysicsEngine;
 
@@ -174,18 +177,21 @@ protected:
     virtual void setMotionType(PhysicsMotionType motionType);
     void updateCCDConfiguration();
 
-    void setRigidBody(btRigidBody* body);
+    virtual void setRigidBody(btRigidBody* body);
     virtual void setShape(const btCollisionShape* shape);
 
     MotionStateType _type { MOTIONSTATE_TYPE_INVALID }; // type of MotionState
     PhysicsMotionType _motionType { MOTION_TYPE_STATIC }; // type of motion: KINEMATIC, DYNAMIC, or STATIC
 
-    const btCollisionShape* _shape;
+    const btCollisionShape* _shape { nullptr };
     btRigidBody* _body { nullptr };
     float _density { 1.0f };
 
+    // ACTION_CAN_CONTROL_KINEMATIC_OBJECT_HACK: These date members allow an Action
+    // to operate on a kinematic object without screwing up our default kinematic integration
+    // which is done in the MotionState::getWorldTransform().
     mutable uint32_t _lastKinematicStep;
-    bool _hasInternalKinematicChanges { false };
+    mutable bool _hasInternalKinematicChanges { false };
 };
 
 using SetOfMotionStates = QSet<ObjectMotionState*>;

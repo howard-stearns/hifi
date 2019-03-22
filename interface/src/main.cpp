@@ -23,10 +23,11 @@
 #include <SandboxUtils.h>
 #include <SharedUtil.h>
 #include <NetworkAccessManager.h>
+#include <gl/GLHelpers.h>
 
 #include "AddressManager.h"
 #include "Application.h"
-#include "Crashpad.h"
+#include "CrashHandler.h"
 #include "InterfaceLogging.h"
 #include "UserActivityLogger.h"
 #include "MainWindow.h"
@@ -40,7 +41,61 @@ extern "C" {
 #endif
 
 int main(int argc, const char* argv[]) {
+#ifdef Q_OS_MAC
+    auto format = getDefaultOpenGLSurfaceFormat();
+    // Deal with some weirdness in the chromium context sharing on Mac.
+    // The primary share context needs to be 3.2, so that the Chromium will
+    // succeed in it's creation of it's command stub contexts.  
+    format.setVersion(3, 2);
+    // This appears to resolve the issues with corrupted fonts on OSX.  No
+    // idea why.
+    qputenv("QT_ENABLE_GLYPH_CACHE_WORKAROUND", "true");
+	// https://i.kym-cdn.com/entries/icons/original/000/008/342/ihave.jpg
+    QSurfaceFormat::setDefaultFormat(format);
+#endif
     setupHifiApplication(BuildInfo::INTERFACE_NAME);
+
+    QStringList arguments;
+    for (int i = 0; i < argc; ++i) {
+        arguments << argv[i];
+    }
+
+    QCommandLineParser parser;
+    parser.setApplicationDescription("High Fidelity Interface");
+    QCommandLineOption versionOption = parser.addVersionOption();
+    QCommandLineOption helpOption = parser.addHelpOption();
+
+    QCommandLineOption urlOption("url", "", "value");
+    QCommandLineOption noUpdaterOption("no-updater", "Do not show auto-updater");
+    QCommandLineOption checkMinSpecOption("checkMinSpec", "Check if machine meets minimum specifications");
+    QCommandLineOption runServerOption("runServer", "Whether to run the server");
+    QCommandLineOption serverContentPathOption("serverContentPath", "Where to find server content", "serverContentPath");
+    QCommandLineOption allowMultipleInstancesOption("allowMultipleInstances", "Allow multiple instances to run");
+    QCommandLineOption overrideAppLocalDataPathOption("cache", "set test cache <dir>", "dir");
+    QCommandLineOption overrideScriptsPathOption(SCRIPTS_SWITCH, "set scripts <path>", "path");
+
+    parser.addOption(urlOption);
+    parser.addOption(noUpdaterOption);
+    parser.addOption(checkMinSpecOption);
+    parser.addOption(runServerOption);
+    parser.addOption(serverContentPathOption);
+    parser.addOption(overrideAppLocalDataPathOption);
+    parser.addOption(overrideScriptsPathOption);
+    parser.addOption(allowMultipleInstancesOption);
+
+    if (!parser.parse(arguments)) {
+        std::cout << parser.errorText().toStdString() << std::endl; // Avoid Qt log spam
+    }
+
+    if (parser.isSet(versionOption)) {
+        parser.showVersion();
+        Q_UNREACHABLE();
+    }
+    if (parser.isSet(helpOption)) {
+        QCoreApplication mockApp(argc, const_cast<char**>(argv)); // required for call to showHelp()
+        parser.showHelp();
+        Q_UNREACHABLE();
+    }
 
     // Early check for --traceFile argument 
     auto tracer = DependencyManager::set<tracing::Tracer>();
@@ -81,36 +136,19 @@ int main(int argc, const char* argv[]) {
 
     // Instance UserActivityLogger now that the settings are loaded
     auto& ual = UserActivityLogger::getInstance();
+    // once the settings have been loaded, check if we need to flip the default for UserActivityLogger
+    if (!ual.isDisabledSettingSet()) {
+        // the user activity logger is opt-out for Interface
+        // but it's defaulted to disabled for other targets
+        // so we need to enable it here if it has never been disabled by the user
+        ual.disable(false);
+    }
     qDebug() << "UserActivityLogger is enabled:" << ual.isEnabled();
 
     if (ual.isEnabled()) {
-        auto crashHandlerStarted = startCrashHandler();
+        auto crashHandlerStarted = startCrashHandler(argv[0]);
         qDebug() << "Crash handler started:" << crashHandlerStarted;
     }
-
-    QStringList arguments;
-    for (int i = 0; i < argc; ++i) {
-        arguments << argv[i];
-    }
-
-    QCommandLineParser parser;
-    QCommandLineOption urlOption("url", "", "value");
-    QCommandLineOption noUpdaterOption("no-updater", "Do not show auto-updater");
-    QCommandLineOption checkMinSpecOption("checkMinSpec", "Check if machine meets minimum specifications");
-    QCommandLineOption runServerOption("runServer", "Whether to run the server");
-    QCommandLineOption serverContentPathOption("serverContentPath", "Where to find server content", "serverContentPath");
-    QCommandLineOption allowMultipleInstancesOption("allowMultipleInstances", "Allow multiple instances to run");
-    QCommandLineOption overrideAppLocalDataPathOption("cache", "set test cache <dir>", "dir");
-    QCommandLineOption overrideScriptsPathOption(SCRIPTS_SWITCH, "set scripts <path>", "path");
-    parser.addOption(urlOption);
-    parser.addOption(noUpdaterOption);
-    parser.addOption(checkMinSpecOption);
-    parser.addOption(runServerOption);
-    parser.addOption(serverContentPathOption);
-    parser.addOption(overrideAppLocalDataPathOption);
-    parser.addOption(overrideScriptsPathOption);
-    parser.addOption(allowMultipleInstancesOption);
-    parser.parse(arguments);
 
 
     const QString& applicationName = getInterfaceSharedMemoryName();
@@ -151,7 +189,7 @@ int main(int argc, const char* argv[]) {
         if (socket.waitForConnected(LOCAL_SERVER_TIMEOUT_MS)) {
             if (parser.isSet(urlOption)) {
                 QUrl url = QUrl(parser.value(urlOption));
-                if (url.isValid() && url.scheme() == URL_SCHEME_HIFI) {
+                if (url.isValid() && (url.scheme() == URL_SCHEME_HIFI || url.scheme() == URL_SCHEME_HIFIAPP)) {
                     qDebug() << "Writing URL to local socket";
                     socket.write(url.toString().toUtf8());
                     if (!socket.waitForBytesWritten(5000)) {
@@ -255,6 +293,9 @@ int main(int argc, const char* argv[]) {
         // Extend argv to enable WebGL rendering
         std::vector<const char*> argvExtended(&argv[0], &argv[argc]);
         argvExtended.push_back("--ignore-gpu-blacklist");
+#ifdef Q_OS_ANDROID
+        argvExtended.push_back("--suppress-settings-reset");
+#endif
         int argcExtended = (int)argvExtended.size();
 
         PROFILE_SYNC_END(startup, "main startup", "");

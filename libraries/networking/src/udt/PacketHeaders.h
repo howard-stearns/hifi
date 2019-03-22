@@ -56,8 +56,8 @@ public:
         ICEServerPeerInformation,
         ICEServerQuery,
         OctreeStats,
-        UNUSED_PACKET_TYPE_1,
-        UNUSED_PACKET_TYPE_2,
+        SetAvatarTraits,
+        UNUSED_PACKET_TYPE,
         AssignmentClientStatus,
         NoisyMute,
         AvatarIdentity,
@@ -126,13 +126,14 @@ public:
         EntityScriptCallMethod,
         ChallengeOwnershipRequest,
         ChallengeOwnershipReply,
-
         OctreeDataFileRequest,
         OctreeDataFileReply,
         OctreeDataPersist,
-
         EntityClone,
-
+        EntityQueryInitialResultsComplete,
+        BulkAvatarTraits,
+        AudioSoloRequest,
+        BulkAvatarTraitsAck,
         NUM_PACKET_TYPE
     };
 
@@ -236,7 +237,39 @@ enum class EntityVersion : PacketVersion {
     ShadowControl,
     MaterialData,
     CloneableData,
-    CollisionMask16Bytes
+    CollisionMask16Bytes,
+    YieldSimulationOwnership,
+    ParticleEntityFix,
+    ParticleSpin,
+    BloomEffect,
+    GrabProperties,
+    ScriptGlmVectors,
+    FixedLightSerialization,
+    MaterialRepeat,
+    EntityHostTypes,
+    CleanupProperties,
+    ImageEntities,
+    GridEntities,
+    MissingTextProperties,
+    GrabTraits,
+    MorePropertiesCleanup,
+    FixPropertiesFromCleanup,
+    UpdatedPolyLines,
+    FixProtocolVersionBumpMismatch,
+    MigrateOverlayRenderProperties,
+    MissingWebEntityProperties,
+    PulseProperties,
+    RingGizmoEntities,
+    AvatarPriorityZone,
+    ShowKeyboardFocusHighlight,
+    WebBillboardMode,
+    ModelScale,
+    ReOrderParentIDProperties,
+    CertificateTypeProperty,
+
+    // Add new versions above here
+    NUM_PACKET_TYPE,
+    LAST_PACKET_TYPE = NUM_PACKET_TYPE - 1
 };
 
 enum class EntityScriptCallMethodVersion : PacketVersion {
@@ -282,7 +315,19 @@ enum class AvatarMixerPacketVersion : PacketVersion {
     AvatarIdentityLookAtSnapping,
     UpdatedMannequinDefaultAvatar,
     AvatarJointDefaultPoseFlags,
-    FBXReaderNodeReparenting
+    FBXReaderNodeReparenting,
+    FixMannequinDefaultAvatarFeet,
+    ProceduralFaceMovementFlagsAndBlendshapes,
+    FarGrabJoints,
+    MigrateSkeletonURLToTraits,
+    MigrateAvatarEntitiesToTraits,
+    FarGrabJointsRedux,
+    JointTransScaled,
+    GrabTraits,
+    CollisionFlag,
+    AvatarTraitsAck,
+    FasterAvatarEntities,
+    SendMaxTranslationDimension
 };
 
 enum class DomainConnectRequestVersion : PacketVersion {
@@ -309,7 +354,8 @@ enum class DomainListVersion : PacketVersion {
     PrePermissionsGrid = 18,
     PermissionsGrid,
     GetUsernameFromUUIDSupport,
-    GetMachineFingerprintFromUUIDSupport
+    GetMachineFingerprintFromUUIDSupport,
+    AuthenticationOptional
 };
 
 enum class AudioVersion : PacketVersion {

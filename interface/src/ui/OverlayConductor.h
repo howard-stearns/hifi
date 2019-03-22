@@ -23,22 +23,12 @@ public:
 
 private:
     bool headOutsideOverlay() const;
-    bool updateAvatarHasDriveInput();
     bool updateAvatarIsAtRest();
 
-    enum SupressionFlags {
-        SuppressedByDrive = 0x01,
-        SuppressedByHead = 0x02,
-        SuppressMask = 0x03,
-    };
-
-    uint8_t _flags { SuppressedByDrive };
+#if !defined(DISABLE_QML)
+    bool _suppressedByHead { false };
     bool _hmdMode { false };
-
-    // used by updateAvatarHasDriveInput
-    uint64_t _desiredDrivingTimer { 0 };
-    bool _desiredDriving { false };
-    bool _currentDriving { false };
+#endif
 
     // used by updateAvatarIsAtRest
     uint64_t _desiredAtRestTimer { 0 };

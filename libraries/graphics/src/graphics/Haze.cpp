@@ -177,17 +177,8 @@ void Haze::setHazeBaseReference(const float hazeBaseReference) {
 
 void Haze::setHazeBackgroundBlend(const float hazeBackgroundBlend) {
     auto& params = _hazeParametersBuffer.get<Parameters>();
-
-    if (params.hazeBackgroundBlend != hazeBackgroundBlend) {
-        _hazeParametersBuffer.edit<Parameters>().hazeBackgroundBlend = hazeBackgroundBlend;
+    auto newBlend = 1.0f - hazeBackgroundBlend;
+    if (params.hazeBackgroundBlend != newBlend) {
+        _hazeParametersBuffer.edit<Parameters>().hazeBackgroundBlend = newBlend;
     }
 }
-
-void Haze::setTransform(const glm::mat4& transform) {
-    auto& params = _hazeParametersBuffer.get<Parameters>();
-
-    if (params.transform != transform) {
-        _hazeParametersBuffer.edit<Parameters>().transform = transform;
-    }
-}
-

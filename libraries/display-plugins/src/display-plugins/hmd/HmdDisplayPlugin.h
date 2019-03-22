@@ -21,6 +21,7 @@
 #include "../OpenGLDisplayPlugin.h"
 
 class HmdDisplayPlugin : public OpenGLDisplayPlugin {
+    Q_OBJECT
     using Parent = OpenGLDisplayPlugin;
 public:
     ~HmdDisplayPlugin();
@@ -44,6 +45,12 @@ public:
     float stutterRate() const override;
 
     virtual bool onDisplayTextureReset() override { _clearPreviewFlag = true; return true; };
+
+    void pluginUpdate() override {};
+
+signals:
+    void hmdMountedChanged();
+    void hmdVisibleChanged(bool visible);
 
 protected:
     virtual void hmdPresent() = 0;
@@ -74,7 +81,6 @@ protected:
         mat4 presentPose;
         double sensorSampleTime { 0 };
         double predictedDisplayTime { 0 };
-        mat3 presentReprojection;
     };
 
     QMap<uint32_t, FrameInfo> _frameInfos;
@@ -98,7 +104,6 @@ private:
         gpu::BufferPointer indices;
         uint32_t indexCount { 0 };
         gpu::PipelinePointer pipeline;
-        int32_t uniformsLocation { -1 };
 
         gpu::BufferPointer uniformsBuffer;
 

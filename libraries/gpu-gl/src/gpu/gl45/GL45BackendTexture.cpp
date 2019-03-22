@@ -24,6 +24,10 @@
 #include <gpu/TextureTable.h>
 #include <gpu/gl/GLTexelFormat.h>
 
+static const QString FORCE_MOBILE_TEXTURES_STRING{ "HIFI_FORCE_MOBILE_TEXTURES" };
+static bool FORCE_MOBILE_TEXTURES = QProcessEnvironment::systemEnvironment().contains(FORCE_MOBILE_TEXTURES_STRING);
+
+
 using namespace gpu;
 using namespace gpu::gl;
 using namespace gpu::gl45;
@@ -45,9 +49,10 @@ bool GL45Backend::supportedTextureFormat(const gpu::Element& format) {
         case gpu::Semantic::COMPRESSED_EAC_RED_SIGNED:
         case gpu::Semantic::COMPRESSED_EAC_XY:
         case gpu::Semantic::COMPRESSED_EAC_XY_SIGNED:
-            return false;
+            return FORCE_MOBILE_TEXTURES;
+
         default:
-            return true;
+            return FORCE_MOBILE_TEXTURES ? !format.isCompressed() : true;
     }
 }
 
@@ -152,7 +157,7 @@ public:
             glSamplerParameteri(result, GL_TEXTURE_MIN_FILTER, fm.minFilter);
             glSamplerParameteri(result, GL_TEXTURE_MAG_FILTER, fm.magFilter);
             if (sampler.doComparison()) {
-                glSamplerParameteri(result, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE_ARB);
+                glSamplerParameteri(result, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
                 glSamplerParameteri(result, GL_TEXTURE_COMPARE_FUNC, COMPARISON_TO_GL[sampler.getComparisonFunction()]);
             } else {
                 glSamplerParameteri(result, GL_TEXTURE_COMPARE_MODE, GL_NONE);
@@ -341,7 +346,7 @@ void GL45Texture::syncSampler() const {
     glTextureParameteri(_id, GL_TEXTURE_MAG_FILTER, fm.magFilter);
 
     if (sampler.doComparison()) {
-        glTextureParameteri(_id, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE_ARB);
+        glTextureParameteri(_id, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
         glTextureParameteri(_id, GL_TEXTURE_COMPARE_FUNC, COMPARISON_TO_GL[sampler.getComparisonFunction()]);
     } else {
         glTextureParameteri(_id, GL_TEXTURE_COMPARE_MODE, GL_NONE);
@@ -374,8 +379,24 @@ void GL45FixedAllocationTexture::allocateStorage() const {
     const GLTexelFormat texelFormat = GLTexelFormat::evalGLTexelFormat(_gpuObject.getTexelFormat());
     const auto dimensions = _gpuObject.getDimensions();
     const auto mips = _gpuObject.getNumMips();
+    const auto numSlices = _gpuObject.getNumSlices();
+    const auto numSamples = _gpuObject.getNumSamples();
 
-    glTextureStorage2D(_id, mips, texelFormat.internalFormat, dimensions.x, dimensions.y);
+
+    if (!_gpuObject.isMultisample()) {
+        if (!_gpuObject.isArray()) {
+            glTextureStorage2D(_id, mips, texelFormat.internalFormat, dimensions.x, dimensions.y);
+        } else {
+            glTextureStorage3D(_id, mips, texelFormat.internalFormat, dimensions.x, dimensions.y, numSlices);
+        }
+    } else {
+        if (!_gpuObject.isArray()) {
+            glTextureStorage2DMultisample(_id, numSamples, texelFormat.internalFormat, dimensions.x, dimensions.y, GL_FALSE);
+        }
+        else {
+            glTextureStorage3DMultisample(_id, numSamples, texelFormat.internalFormat, dimensions.x, dimensions.y, numSlices, GL_FALSE);
+        }
+    }
 
     glTextureParameteri(_id, GL_TEXTURE_BASE_LEVEL, 0);
     glTextureParameteri(_id, GL_TEXTURE_MAX_LEVEL, mips - 1);

@@ -12,8 +12,8 @@ import QtQuick 2.7
 import QtQuick.Controls 1.4 as Original
 import QtQuick.Controls.Styles 1.4
 
-import "qrc:///qml/styles-uit"
-import "qrc:///qml/controls-uit" as HifiControls
+import stylesUit 1.0
+import controlsUit 1.0 as HifiControls
 
 import "../jet.js" as Jet
 
@@ -21,8 +21,6 @@ Rectangle {
     HifiConstants { id: hifi;}
     color: hifi.colors.baseGray;
     id: root
- //   width: parent ? parent.width : 200
- //   height: parent ? parent.height : 400
     property var rootConfig : Workload
 
     Original.TextArea {
@@ -34,7 +32,7 @@ Rectangle {
 
     Component.onCompleted: {
         var message = ""
-        var functor = Jet.job_print_functor(function (line) { message += line + "\n"; }, false);
+        var functor = Jet.job_print_functor(function (line) { message += line + "\n"; }, false, true);
         Jet.task_traverseTree(rootConfig, functor);
         textArea.append(message);
     }

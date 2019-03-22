@@ -14,14 +14,14 @@
 
 #include <QSet>
 
-#include <avatars-renderer/Avatar.h>
 #include <ObjectMotionState.h>
 #include <BulletUtil.h>
 
+#include "OtherAvatar.h"
 
 class AvatarMotionState : public ObjectMotionState {
 public:
-    AvatarMotionState(AvatarSharedPointer avatar, const btCollisionShape* shape);
+    AvatarMotionState(OtherAvatarPointer avatar, const btCollisionShape* shape);
 
     virtual void handleEasyChanges(uint32_t& flags) override;
     virtual bool handleHardAndEasyChanges(uint32_t& flags, PhysicsEngine* engine) override;
@@ -59,11 +59,15 @@ public:
 
     virtual const QUuid getObjectID() const override;
 
+    virtual QString getName() const override;
     virtual QUuid getSimulatorID() const override;
 
     void setBoundingBox(const glm::vec3& corner, const glm::vec3& diagonal);
 
     void addDirtyFlags(uint32_t flags) { _dirtyFlags |= flags; }
+
+    void setCollisionGroup(int32_t group) { _collisionGroup = group; }
+    int32_t getCollisionGroup() { return _collisionGroup; }
 
     virtual void computeCollisionGroupAndMask(int32_t& group, int32_t& mask) const override;
 
@@ -73,6 +77,10 @@ public:
     friend class Avatar;
 
 protected:
+    void setRigidBody(btRigidBody* body) override;
+    void setShape(const btCollisionShape* shape) override;
+    void cacheShapeDiameter();
+
     // the dtor had been made protected to force the compiler to verify that it is only
     // ever called by the Avatar class dtor.
     ~AvatarMotionState();
@@ -80,9 +88,9 @@ protected:
     virtual bool isReadyToComputeShape() const override { return true; }
     virtual const btCollisionShape* computeNewShape() override;
 
-    AvatarSharedPointer _avatar;
+    OtherAvatarPointer _avatar;
     float _diameter { 0.0f };
-
+    int32_t _collisionGroup;
     uint32_t _dirtyFlags;
 };
 

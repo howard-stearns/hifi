@@ -12,8 +12,8 @@
 import QtQuick 2.5
 import QtQuick.Dialogs 1.2 as OriginalDialogs
 
-import "../../styles-uit"
-import "../../controls-uit"
+import stylesUit 1.0
+import controlsUit 1.0
 import "../dialogs"
 
 Rectangle {
@@ -24,16 +24,21 @@ Rectangle {
     color: hifi.colors.baseGray;
     signal sendToScript(var message);
     property bool keyboardEnabled: false
+    property bool keyboardRaised: false
     property bool punctuationMode: false
     property bool keyboardRasied: false
 
     function errorMessageBox(message) {
-        return desktop.messageBox({
-            icon: hifi.icons.warning,
-            defaultButton: OriginalDialogs.StandardButton.Ok,
-            title: "Error",
-            text: message
-        });
+        try {
+            return desktop.messageBox({
+                icon: hifi.icons.warning,
+                defaultButton: OriginalDialogs.StandardButton.Ok,
+                title: "Error",
+                text: message
+            });
+        } catch(e) {
+            Window.alert(message);
+        }
     }
 
     Item {
@@ -111,8 +116,13 @@ Rectangle {
             Column {
                 id: column2
                 width: 200
-                height: 400
+                height: 600
                 spacing: 10
+
+                CheckBox {
+                    id: grabbable
+                    text: qsTr("Grabbable")
+                }
 
                 CheckBox {
                     id: dynamic
@@ -212,9 +222,10 @@ Rectangle {
                             newModelDialog.sendToScript({
                                 method: "newModelDialogAdd",
                                 params: {
-                                    textInput: modelURL.text,
-                                    checkBox: dynamic.checked,
-                                    comboBox: collisionType.currentIndex
+                                    url: modelURL.text,
+                                    dynamic: dynamic.checked,
+                                    collisionShapeIndex: collisionType.currentIndex,
+                                    grabbable: grabbable.checked
                                 }
                             });
                         }
@@ -235,10 +246,11 @@ Rectangle {
 
     Keyboard {
         id: keyboard
-        raised: parent.keyboardEnabled
+        raised: parent.keyboardEnabled && parent.keyboardRaised
         numeric: parent.punctuationMode
         anchors {
             bottom: parent.bottom
+            bottomMargin: 40
             left: parent.left
             right: parent.right
         }

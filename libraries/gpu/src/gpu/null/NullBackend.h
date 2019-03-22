@@ -28,7 +28,6 @@ class Backend : public gpu::Backend {
     friend class gpu::Context;
     static void init() {}
     static gpu::Backend* createBackend() { return new Backend(); }
-    static bool makeProgram(Shader& shader, const Shader::BindingSet& slotBindings, const Shader::CompilationHandler& handler) { return true; }
 
 protected:
     explicit Backend(bool syncCache) : Parent() { }
@@ -43,6 +42,8 @@ public:
     // the gpu::Backend state with the true gl state which has probably been messed up by these ugly naked gl calls
     // Let's try to avoid to do that as much as possible!
     void syncCache() final { }
+
+    void syncProgram(const gpu::ShaderPointer& program) final {}
 
     // This is the ugly "download the pixels to sysmem for taking a snapshot"
     // Just avoid using it, it's ugly and will break performances

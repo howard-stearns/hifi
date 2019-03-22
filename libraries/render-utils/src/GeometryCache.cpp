@@ -23,47 +23,31 @@
 
 #include <FSTReader.h>
 #include <NumericalConstants.h>
+#include <graphics/TextureMap.h>
+#include <graphics/BufferViewHelpers.h>
+#include <render/Args.h>
+#include <shaders/Shaders.h>
+#include <graphics/ShaderConstants.h>
 
+#include "render-utils/ShaderConstants.h"
 #include "TextureCache.h"
 #include "RenderUtilsLogging.h"
 #include "StencilMaskPass.h"
 #include "FadeEffect.h"
 
-#include "gpu/StandardShaderLib.h"
-
-#include "graphics/TextureMap.h"
-#include "graphics/BufferViewHelpers.h"
-#include "render/Args.h"
-
-#include "standardTransformPNTC_vert.h"
-#include "standardDrawTexture_frag.h"
-
-#include "simple_vert.h"
-#include "simple_textured_frag.h"
-#include "simple_transparent_textured_frag.h"
-#include "simple_textured_unlit_frag.h"
-#include "simple_fade_vert.h"
-#include "simple_textured_fade_frag.h"
-#include "simple_textured_unlit_fade_frag.h"
-#include "simple_opaque_web_browser_frag.h"
-#include "simple_transparent_web_browser_frag.h"
-#include "glowLine_vert.h"
-#include "glowLine_frag.h"
-
-#include "forward_simple_textured_frag.h"
-#include "forward_simple_textured_transparent_frag.h"
-#include "forward_simple_textured_unlit_frag.h"
-
 #include "DeferredLightingEffect.h"
 
-#if defined(USE_GLES)
-static bool DISABLE_DEFERRED = true;
-#else
-static const QString RENDER_FORWARD{ "HIFI_RENDER_FORWARD" };
-static bool DISABLE_DEFERRED = QProcessEnvironment::systemEnvironment().contains(RENDER_FORWARD);
-#endif
+#include <DisableDeferred.h>
 
-#include "grid_frag.h"
+namespace gr {
+    using graphics::slot::texture::Texture;
+    using graphics::slot::buffer::Buffer;
+}
+
+namespace ru {
+    using render_utils::slot::texture::Texture;
+    using render_utils::slot::buffer::Buffer;
+}
 
 //#define WANT_DEBUG
 
@@ -730,6 +714,9 @@ QHash<SimpleProgramKey, gpu::PipelinePointer> GeometryCache::_simplePrograms;
 gpu::ShaderPointer GeometryCache::_simpleShader;
 gpu::ShaderPointer GeometryCache::_transparentShader;
 gpu::ShaderPointer GeometryCache::_unlitShader;
+gpu::ShaderPointer GeometryCache::_forwardSimpleShader;
+gpu::ShaderPointer GeometryCache::_forwardTransparentShader;
+gpu::ShaderPointer GeometryCache::_forwardUnlitShader;
 gpu::ShaderPointer GeometryCache::_simpleFadeShader;
 gpu::ShaderPointer GeometryCache::_unlitFadeShader;
 
@@ -821,16 +808,13 @@ void GeometryCache::initializeShapePipelines() {
 }
 
 render::ShapePipelinePointer GeometryCache::getShapePipeline(bool textured, bool transparent, bool culled,
-    bool unlit, bool depthBias) {
+    bool unlit, bool depthBias, bool forward) {
 
-    return std::make_shared<render::ShapePipeline>(getSimplePipeline(textured, transparent, culled, unlit, depthBias, false, true), nullptr,
+    return std::make_shared<render::ShapePipeline>(getSimplePipeline(textured, transparent, culled, unlit, depthBias, false, true, forward), nullptr,
         [](const render::ShapePipeline& pipeline, gpu::Batch& batch, render::Args* args) {
-        batch.setResourceTexture(render::ShapePipeline::Slot::MAP::ALBEDO, DependencyManager::get<TextureCache>()->getWhiteTexture());
-        DependencyManager::get<DeferredLightingEffect>()->setupKeyLightBatch(args, batch,
-                                                                             pipeline.pipeline->getProgram()->getUniformBuffers().findLocation("keyLightBuffer"),
-                                                                             pipeline.pipeline->getProgram()->getUniformBuffers().findLocation("lightAmbientBuffer"),
-                                                                             pipeline.pipeline->getProgram()->getUniformBuffers().findLocation("skyboxMap"));
-    }
+            batch.setResourceTexture(gr::Texture::MaterialAlbedo, DependencyManager::get<TextureCache>()->getWhiteTexture());
+            DependencyManager::get<DeferredLightingEffect>()->setupKeyLightBatch(args, batch);
+        }
     );
 }
 
@@ -838,22 +822,14 @@ render::ShapePipelinePointer GeometryCache::getFadingShapePipeline(bool textured
     bool unlit, bool depthBias) {
     auto fadeEffect = DependencyManager::get<FadeEffect>();
     auto fadeBatchSetter = fadeEffect->getBatchSetter();
-    auto fadeItemSetter = fadeEffect->getItemStoredSetter();
+    auto fadeItemSetter = fadeEffect->getItemUniformSetter();
     return std::make_shared<render::ShapePipeline>(getSimplePipeline(textured, transparent, culled, unlit, depthBias, true), nullptr,
         [fadeBatchSetter, fadeItemSetter](const render::ShapePipeline& shapePipeline, gpu::Batch& batch, render::Args* args) {
-            batch.setResourceTexture(render::ShapePipeline::Slot::MAP::ALBEDO, DependencyManager::get<TextureCache>()->getWhiteTexture());
+            batch.setResourceTexture(gr::Texture::MaterialAlbedo, DependencyManager::get<TextureCache>()->getWhiteTexture());
             fadeBatchSetter(shapePipeline, batch, args);
         },
         fadeItemSetter
     );
-}
-
-render::ShapePipelinePointer GeometryCache::getOpaqueShapePipeline(bool isFading) {
-    return isFading ? _simpleOpaqueFadePipeline : _simpleOpaquePipeline;
-}
-
-render::ShapePipelinePointer GeometryCache::getTransparentShapePipeline(bool isFading) {
-    return isFading ? _simpleTransparentFadePipeline : _simpleTransparentPipeline;
 }
 
 void GeometryCache::renderShape(gpu::Batch& batch, Shape shape) {
@@ -956,42 +932,44 @@ void GeometryCache::renderWireSphere(gpu::Batch& batch, const glm::vec4& color) 
 }
 
 void GeometryCache::renderGrid(gpu::Batch& batch, const glm::vec2& minCorner, const glm::vec2& maxCorner,
-    int majorRows, int majorCols, float majorEdge,
-    int minorRows, int minorCols, float minorEdge,
-    const glm::vec4& color, bool isLayered, int id) {
-    static const glm::vec2 MIN_TEX_COORD(0.0f, 0.0f);
-    static const glm::vec2 MAX_TEX_COORD(1.0f, 1.0f);
-
-    bool registered = (id != UNKNOWN_ID);
+        int majorRows, int majorCols, float majorEdge, int minorRows, int minorCols, float minorEdge,
+        const glm::vec4& color, int id) {
     Vec2FloatPair majorKey(glm::vec2(majorRows, majorCols), majorEdge);
     Vec2FloatPair minorKey(glm::vec2(minorRows, minorCols), minorEdge);
     Vec2FloatPairPair key(majorKey, minorKey);
 
     // Make the gridbuffer
-    if (registered && (!_registeredGridBuffers.contains(id) || _lastRegisteredGridBuffer[id] != key)) {
-        GridSchema gridSchema;
-        GridBuffer gridBuffer = std::make_shared<gpu::Buffer>(sizeof(GridSchema), (const gpu::Byte*) &gridSchema);
-
-        if (registered && _registeredGridBuffers.contains(id)) {
-            gridBuffer = _registeredGridBuffers[id];
+    GridBuffer gridBuffer;
+    if (id != UNKNOWN_ID) {
+        auto gridBufferIter = _registeredGridBuffers.find(id);
+        bool hadGridBuffer = gridBufferIter != _registeredGridBuffers.end();
+        if (hadGridBuffer) {
+            gridBuffer = gridBufferIter.value();
+        } else {
+            GridSchema gridSchema;
+            gridBuffer = std::make_shared<gpu::Buffer>(sizeof(GridSchema), (const gpu::Byte*)&gridSchema);
         }
 
-        _registeredGridBuffers[id] = gridBuffer;
-        _lastRegisteredGridBuffer[id] = key;
+        if (!hadGridBuffer || _lastRegisteredGridBuffer[id] != key) {
+            _registeredGridBuffers[id] = gridBuffer;
+            _lastRegisteredGridBuffer[id] = key;
 
-        gridBuffer.edit<GridSchema>().period = glm::vec4(majorRows, majorCols, minorRows, minorCols);
-        gridBuffer.edit<GridSchema>().offset.x = -(majorEdge / majorRows) / 2;
-        gridBuffer.edit<GridSchema>().offset.y = -(majorEdge / majorCols) / 2;
-        gridBuffer.edit<GridSchema>().offset.z = -(minorEdge / minorRows) / 2;
-        gridBuffer.edit<GridSchema>().offset.w = -(minorEdge / minorCols) / 2;
-        gridBuffer.edit<GridSchema>().edge = glm::vec4(glm::vec2(majorEdge),
-            // If rows or columns are not set, do not draw minor gridlines
-            glm::vec2((minorRows != 0 && minorCols != 0) ? minorEdge : 0.0f));
+            gridBuffer.edit<GridSchema>().period = glm::vec4(majorRows, majorCols, minorRows, minorCols);
+            gridBuffer.edit<GridSchema>().offset.x = -(majorEdge / majorRows) / 2;
+            gridBuffer.edit<GridSchema>().offset.y = -(majorEdge / majorCols) / 2;
+            gridBuffer.edit<GridSchema>().offset.z = -(minorEdge / minorRows) / 2;
+            gridBuffer.edit<GridSchema>().offset.w = -(minorEdge / minorCols) / 2;
+            gridBuffer.edit<GridSchema>().edge = glm::vec4(glm::vec2(majorEdge),
+                // If rows or columns are not set, do not draw minor gridlines
+                glm::vec2((minorRows != 0 && minorCols != 0) ? minorEdge : 0.0f));
+        }
     }
 
     // Set the grid pipeline
-    useGridPipeline(batch, _registeredGridBuffers[id], isLayered);
+    useGridPipeline(batch, gridBuffer, color.a < 1.0f);
 
+    static const glm::vec2 MIN_TEX_COORD(0.0f, 0.0f);
+    static const glm::vec2 MAX_TEX_COORD(1.0f, 1.0f);
     renderQuad(batch, minCorner, maxCorner, MIN_TEX_COORD, MAX_TEX_COORD, color, id);
 }
 
@@ -1039,7 +1017,7 @@ void GeometryCache::updateVertices(int id, const QVector<glm::vec2>& points, con
     int* colorData = new int[details.vertices];
     int* colorDataAt = colorData;
 
-    const glm::vec3 NORMAL(0.0f, 0.0f, 1.0f);
+    const glm::vec3 NORMAL(0.0f, 1.0f, 0.0f);
     auto pointCount = points.size();
     auto colorCount = colors.size();
     int compactColor = 0;
@@ -1117,7 +1095,7 @@ void GeometryCache::updateVertices(int id, const QVector<glm::vec3>& points, con
     int* colorData = new int[details.vertices];
     int* colorDataAt = colorData;
 
-    const glm::vec3 NORMAL(0.0f, 0.0f, 1.0f);
+    const glm::vec3 NORMAL(0.0f, 1.0f, 0.0f);
     auto pointCount = points.size();
     auto colorCount = colors.size();
     for (auto i = 0; i < pointCount; i++) {
@@ -1205,7 +1183,7 @@ void GeometryCache::updateVertices(int id, const QVector<glm::vec3>& points, con
     int* colorData = new int[details.vertices];
     int* colorDataAt = colorData;
 
-    const glm::vec3 NORMAL(0.0f, 0.0f, 1.0f);
+    const glm::vec3 NORMAL(0.0f, 1.0f, 0.0f);
     for (int i = 0; i < points.size(); i++) {
         glm::vec3 point = points[i];
         glm::vec2 texCoord = texCoords[i];
@@ -2028,90 +2006,10 @@ void GeometryCache::renderLine(gpu::Batch& batch, const glm::vec2& p1, const glm
     batch.draw(gpu::LINES, 2, 0);
 }
 
-
-void GeometryCache::renderGlowLine(gpu::Batch& batch, const glm::vec3& p1, const glm::vec3& p2,
-    const glm::vec4& color, float glowIntensity, float glowWidth, int id) {
-
-    // Disable glow lines on OSX
-#ifndef Q_OS_WIN
-    glowIntensity = 0.0f;
-#endif
-
-    if (glowIntensity <= 0.0f) {
-        if (color.a >= 1.0f) {
-            bindSimpleProgram(batch, false, false, false, true, true);
-        } else {
-            bindSimpleProgram(batch, false, true, false, true, true);
-        }
-        renderLine(batch, p1, p2, color, id);
-        return;
-    }
-
-    // Compile the shaders
-    static const uint32_t LINE_DATA_SLOT = 1;
-    static std::once_flag once;
-    std::call_once(once, [&] {
-        auto state = std::make_shared<gpu::State>();
-        auto VS = glowLine_vert::getShader();
-        auto PS = glowLine_frag::getShader();
-        auto program = gpu::Shader::createProgram(VS, PS);
-        state->setCullMode(gpu::State::CULL_NONE);
-        state->setDepthTest(true, false, gpu::LESS_EQUAL);
-        state->setBlendFunction(true,
-            gpu::State::SRC_ALPHA, gpu::State::BLEND_OP_ADD, gpu::State::INV_SRC_ALPHA,
-            gpu::State::FACTOR_ALPHA, gpu::State::BLEND_OP_ADD, gpu::State::ONE);
-
-        PrepareStencil::testMask(*state);
-
-        gpu::Shader::BindingSet slotBindings;
-        slotBindings.insert(gpu::Shader::Binding(std::string("lineData"), LINE_DATA_SLOT));
-        gpu::Shader::makeProgram(*program, slotBindings);
-        _glowLinePipeline = gpu::Pipeline::create(program, state);
-    });
-
-    batch.setPipeline(_glowLinePipeline);
-
-    Vec3Pair key(p1, p2);
-    bool registered = (id != UNKNOWN_ID);
-    BatchItemDetails& details = _registeredLine3DVBOs[id];
-
-    // if this is a registered quad, and we have buffers, then check to see if the geometry changed and rebuild if needed
-    if (registered && details.isCreated) {
-        Vec3Pair& lastKey = _lastRegisteredLine3D[id];
-        if (lastKey != key) {
-            details.clear();
-            _lastRegisteredLine3D[id] = key;
-        }
-    }
-
-    const int NUM_VERTICES = 4;
-    if (!details.isCreated) {
-        details.isCreated = true;
-        details.uniformBuffer = std::make_shared<gpu::Buffer>();
-
-        struct LineData {
-            vec4 p1;
-            vec4 p2;
-            vec4 color;
-            float width;
-        };
-
-        LineData lineData { vec4(p1, 1.0f), vec4(p2, 1.0f), color, glowWidth };
-        details.uniformBuffer->resize(sizeof(LineData));
-        details.uniformBuffer->setSubData(0, lineData);
-    }
-
-    // The shader requires no vertices, only uniforms.
-    batch.setUniformBuffer(LINE_DATA_SLOT, details.uniformBuffer);
-    batch.draw(gpu::TRIANGLE_STRIP, NUM_VERTICES, 0);
-}
-
 void GeometryCache::useSimpleDrawPipeline(gpu::Batch& batch, bool noBlend) {
     static std::once_flag once;
     std::call_once(once, [&]() {
-        auto vs = standardTransformPNTC_vert::getShader();
-        auto ps = standardDrawTexture_frag::getShader();
-        auto program = gpu::Shader::createProgram(vs, ps);
+        auto program = gpu::Shader::createProgram(shader::render_utils::program::standardDrawTexture);
 
         auto state = std::make_shared<gpu::State>();
 
@@ -2125,15 +2023,8 @@ void GeometryCache::useSimpleDrawPipeline(gpu::Batch& batch, bool noBlend) {
         auto stateNoBlend = std::make_shared<gpu::State>();
         PrepareStencil::testMaskDrawShape(*stateNoBlend);
 
-        auto noBlendPS = gpu::StandardShaderLib::getDrawTextureOpaquePS();
-        auto programNoBlend = gpu::Shader::createProgram(vs, noBlendPS);
-
+        auto programNoBlend = gpu::Shader::createProgram(shader::render_utils::program::standardDrawTextureNoBlend);
         _standardDrawPipelineNoBlend = gpu::Pipeline::create(programNoBlend, stateNoBlend);
-
-        batch.runLambda([program, programNoBlend] {
-            gpu::Shader::makeProgram((*program));
-            gpu::Shader::makeProgram((*programNoBlend));
-        });
     });
 
     if (noBlend) {
@@ -2143,30 +2034,40 @@ void GeometryCache::useSimpleDrawPipeline(gpu::Batch& batch, bool noBlend) {
     }
 }
 
-void GeometryCache::useGridPipeline(gpu::Batch& batch, GridBuffer gridBuffer, bool isLayered) {
-    if (!_gridPipeline) {
-        auto vs = standardTransformPNTC_vert::getShader();
-        auto ps = grid_frag::getShader();
-        auto program = gpu::Shader::createProgram(vs, ps);
-        gpu::Shader::makeProgram((*program));
-        _gridSlot = program->getUniformBuffers().findLocation("gridBuffer");
-
-        auto stateLayered = std::make_shared<gpu::State>();
-        stateLayered->setBlendFunction(true, gpu::State::SRC_ALPHA, gpu::State::BLEND_OP_ADD, gpu::State::INV_SRC_ALPHA);
-        PrepareStencil::testMask(*stateLayered);
-        _gridPipelineLayered = gpu::Pipeline::create(program, stateLayered);
-
-        auto state = std::make_shared<gpu::State>(stateLayered->getValues());
+void GeometryCache::useGridPipeline(gpu::Batch& batch, GridBuffer gridBuffer, bool transparent) {
+    if (!_gridPipelineOpaque || !_gridPipelineTransparent) {
         const float DEPTH_BIAS = 0.001f;
-        state->setDepthBias(DEPTH_BIAS);
-        state->setDepthTest(true, false, gpu::LESS_EQUAL);
-        PrepareStencil::testMaskDrawShape(*state);
-        _gridPipeline = gpu::Pipeline::create(program, state);
+
+        // FIXME: need forward pipelines
+        {
+            auto program = gpu::Shader::createProgram(shader::render_utils::program::grid);
+            auto state = std::make_shared<gpu::State>();
+            state->setDepthTest(true, true, gpu::LESS_EQUAL);
+            state->setBlendFunction(false,
+                gpu::State::SRC_ALPHA, gpu::State::BLEND_OP_ADD, gpu::State::INV_SRC_ALPHA,
+                gpu::State::FACTOR_ALPHA, gpu::State::BLEND_OP_ADD, gpu::State::ONE);
+            PrepareStencil::testMaskDrawShape(*state);
+            state->setCullMode(gpu::State::CULL_NONE);
+            state->setDepthBias(DEPTH_BIAS);
+            _gridPipelineOpaque = gpu::Pipeline::create(program, state);
+        }
+
+        {
+            auto program = gpu::Shader::createProgram(shader::render_utils::program::grid_translucent);
+            auto state = std::make_shared<gpu::State>();
+            state->setDepthTest(true, true, gpu::LESS_EQUAL);
+            state->setBlendFunction(true,
+                gpu::State::SRC_ALPHA, gpu::State::BLEND_OP_ADD, gpu::State::INV_SRC_ALPHA,
+                gpu::State::FACTOR_ALPHA, gpu::State::BLEND_OP_ADD, gpu::State::ONE);
+            PrepareStencil::testMask(*state);
+            state->setCullMode(gpu::State::CULL_NONE);
+            state->setDepthBias(DEPTH_BIAS);
+            _gridPipelineTransparent = gpu::Pipeline::create(program, state);
+        }
     }
 
-    gpu::PipelinePointer pipeline = isLayered ? _gridPipelineLayered : _gridPipeline;
-    batch.setPipeline(pipeline);
-    batch.setUniformBuffer(_gridSlot, gridBuffer);
+    batch.setPipeline(transparent ? _gridPipelineTransparent : _gridPipelineOpaque);
+    batch.setUniformBuffer(0, gridBuffer);
 }
 
 
@@ -2181,6 +2082,7 @@ public:
         HAS_DEPTH_BIAS_FLAG,
         IS_FADING_FLAG,
         IS_ANTIALIASED_FLAG,
+        IS_FORWARD_FLAG,
 
         NUM_FLAGS,
     };
@@ -2193,6 +2095,7 @@ public:
         HAS_DEPTH_BIAS = (1 << HAS_DEPTH_BIAS_FLAG),
         IS_FADING = (1 << IS_FADING_FLAG),
         IS_ANTIALIASED = (1 << IS_ANTIALIASED_FLAG),
+        IS_FORWARD = (1 << IS_FORWARD_FLAG),
     };
     typedef unsigned short Flags;
 
@@ -2205,17 +2108,21 @@ public:
     bool hasDepthBias() const { return isFlag(HAS_DEPTH_BIAS); }
     bool isFading() const { return isFlag(IS_FADING); }
     bool isAntiAliased() const { return isFlag(IS_ANTIALIASED); }
+    bool isForward() const { return isFlag(IS_FORWARD); }
 
     Flags _flags = 0;
-    short _spare = 0;
+#if defined(__clang__)
+    __attribute__((unused))
+#endif
+    short _spare = 0; // Padding
 
     int getRaw() const { return *reinterpret_cast<const int*>(this); }
 
 
     SimpleProgramKey(bool textured = false, bool transparent = false, bool culled = true,
-        bool unlit = false, bool depthBias = false, bool fading = false, bool isAntiAliased = true) {
+        bool unlit = false, bool depthBias = false, bool fading = false, bool isAntiAliased = true, bool forward = false) {
         _flags = (textured ? IS_TEXTURED : 0) | (transparent ? IS_TRANSPARENT : 0) | (culled ? IS_CULLED : 0) |
-            (unlit ? IS_UNLIT : 0) | (depthBias ? HAS_DEPTH_BIAS : 0) | (fading ? IS_FADING : 0) | (isAntiAliased ? IS_ANTIALIASED : 0);
+            (unlit ? IS_UNLIT : 0) | (depthBias ? HAS_DEPTH_BIAS : 0) | (fading ? IS_FADING : 0) | (isAntiAliased ? IS_ANTIALIASED : 0) | (forward ? IS_FORWARD : 0);
     }
 
     SimpleProgramKey(int bitmask) : _flags(bitmask) {}
@@ -2229,12 +2136,9 @@ inline bool operator==(const SimpleProgramKey& a, const SimpleProgramKey& b) {
     return a.getRaw() == b.getRaw();
 }
 
-static void buildWebShader(const gpu::ShaderPointer& vertShader, const gpu::ShaderPointer& fragShader, bool blendEnable,
+static void buildWebShader(int programId, bool blendEnable,
                            gpu::ShaderPointer& shaderPointerOut, gpu::PipelinePointer& pipelinePointerOut) {
-    shaderPointerOut = gpu::Shader::createProgram(vertShader, fragShader);
-
-    gpu::Shader::BindingSet slotBindings;
-    gpu::Shader::makeProgram(*shaderPointerOut, slotBindings);
+    shaderPointerOut = gpu::Shader::createProgram(programId);
     auto state = std::make_shared<gpu::State>();
     state->setCullMode(gpu::State::CULL_NONE);
     state->setDepthTest(true, true, gpu::LESS_EQUAL);
@@ -2254,25 +2158,25 @@ void GeometryCache::bindWebBrowserProgram(gpu::Batch& batch, bool transparent) {
 gpu::PipelinePointer GeometryCache::getWebBrowserProgram(bool transparent) {
     static std::once_flag once;
     std::call_once(once, [&]() {
-        buildWebShader(simple_vert::getShader(), simple_opaque_web_browser_frag::getShader(), false, _simpleOpaqueWebBrowserShader, _simpleOpaqueWebBrowserPipeline);
-        buildWebShader(simple_vert::getShader(), simple_transparent_web_browser_frag::getShader(), true, _simpleTransparentWebBrowserShader, _simpleTransparentWebBrowserPipeline);
+        buildWebShader(shader::render_utils::program::simple_opaque_web_browser, false, _simpleOpaqueWebBrowserShader, _simpleOpaqueWebBrowserPipeline);
+        buildWebShader(shader::render_utils::program::simple_transparent_web_browser, true, _simpleTransparentWebBrowserShader, _simpleTransparentWebBrowserPipeline);
     });
 
     return transparent ? _simpleTransparentWebBrowserPipeline : _simpleOpaqueWebBrowserPipeline;
 }
 
-void GeometryCache::bindSimpleProgram(gpu::Batch& batch, bool textured, bool transparent, bool culled, bool unlit, bool depthBiased, bool isAntiAliased) {
-    batch.setPipeline(getSimplePipeline(textured, transparent, culled, unlit, depthBiased, false, isAntiAliased));
+void GeometryCache::bindSimpleProgram(gpu::Batch& batch, bool textured, bool transparent, bool culled, bool unlit, bool depthBiased, bool isAntiAliased, bool forward) {
+    batch.setPipeline(getSimplePipeline(textured, transparent, culled, unlit, depthBiased, false, isAntiAliased, forward));
 
     // If not textured, set a default albedo map
     if (!textured) {
-        batch.setResourceTexture(render::ShapePipeline::Slot::MAP::ALBEDO,
+        batch.setResourceTexture(gr::Texture::MaterialAlbedo,
             DependencyManager::get<TextureCache>()->getWhiteTexture());
     }
 }
 
-gpu::PipelinePointer GeometryCache::getSimplePipeline(bool textured, bool transparent, bool culled, bool unlit, bool depthBiased, bool fading, bool isAntiAliased) {
-    SimpleProgramKey config { textured, transparent, culled, unlit, depthBiased, fading, isAntiAliased };
+gpu::PipelinePointer GeometryCache::getSimplePipeline(bool textured, bool transparent, bool culled, bool unlit, bool depthBiased, bool fading, bool isAntiAliased, bool forward) {
+    SimpleProgramKey config { textured, transparent, culled, unlit, depthBiased, fading, isAntiAliased, forward };
 
     // If the pipeline already exists, return it
     auto it = _simplePrograms.find(config);
@@ -2284,45 +2188,27 @@ gpu::PipelinePointer GeometryCache::getSimplePipeline(bool textured, bool transp
     if (!fading) {
         static std::once_flag once;
         std::call_once(once, [&]() {
-            auto VS = simple_vert::getShader();
-            auto PS = DISABLE_DEFERRED ? forward_simple_textured_frag::getShader() : simple_textured_frag::getShader();
-            // Use the forward pipeline for both here, otherwise transparents will be unlit
-            auto PSTransparent = DISABLE_DEFERRED ? forward_simple_textured_transparent_frag::getShader() : forward_simple_textured_transparent_frag::getShader();
-            auto PSUnlit = DISABLE_DEFERRED ? forward_simple_textured_unlit_frag::getShader() : simple_textured_unlit_frag::getShader();
+            using namespace shader::render_utils::program;
 
-            _simpleShader = gpu::Shader::createProgram(VS, PS);
-            _transparentShader = gpu::Shader::createProgram(VS, PSTransparent);
-            _unlitShader = gpu::Shader::createProgram(VS, PSUnlit);
-
-            gpu::Shader::BindingSet slotBindings;
-            slotBindings.insert(gpu::Shader::Binding(std::string("originalTexture"), render::ShapePipeline::Slot::MAP::ALBEDO));
-            slotBindings.insert(gpu::Shader::Binding(std::string("lightingModelBuffer"), render::ShapePipeline::Slot::LIGHTING_MODEL));
-            slotBindings.insert(gpu::Shader::Binding(std::string("keyLightBuffer"), render::ShapePipeline::Slot::KEY_LIGHT));
-            slotBindings.insert(gpu::Shader::Binding(std::string("lightAmbientBuffer"), render::ShapePipeline::Slot::LIGHT_AMBIENT_BUFFER));
-            slotBindings.insert(gpu::Shader::Binding(std::string("skyboxMap"), render::ShapePipeline::Slot::MAP::LIGHT_AMBIENT_MAP));
-            gpu::Shader::makeProgram(*_simpleShader, slotBindings);
-            gpu::Shader::makeProgram(*_transparentShader, slotBindings);
-            gpu::Shader::makeProgram(*_unlitShader, slotBindings);
+            _forwardSimpleShader = gpu::Shader::createProgram(forward_simple_textured);
+            _forwardTransparentShader = gpu::Shader::createProgram(forward_simple_textured_transparent);
+            _forwardUnlitShader = gpu::Shader::createProgram(forward_simple_textured_unlit);
+            if (DISABLE_DEFERRED) {
+                _simpleShader = _forwardSimpleShader;
+                _transparentShader = _forwardTransparentShader;
+                _unlitShader = _forwardUnlitShader;
+            } else {
+                _simpleShader = gpu::Shader::createProgram(simple_textured);
+                _transparentShader = gpu::Shader::createProgram(simple_transparent_textured);
+                _unlitShader = gpu::Shader::createProgram(simple_textured_unlit);
+            }
         });
     } else {
         static std::once_flag once;
         std::call_once(once, [&]() {
-            auto VS = simple_fade_vert::getShader();
-            auto PS = DISABLE_DEFERRED ? forward_simple_textured_frag::getShader() : simple_textured_fade_frag::getShader();
-            auto PSUnlit = DISABLE_DEFERRED ? forward_simple_textured_unlit_frag::getShader() : simple_textured_unlit_fade_frag::getShader();
-
-            _simpleFadeShader = gpu::Shader::createProgram(VS, PS);
-            _unlitFadeShader = gpu::Shader::createProgram(VS, PSUnlit);
-
-            gpu::Shader::BindingSet slotBindings;
-            slotBindings.insert(gpu::Shader::Binding(std::string("originalTexture"), render::ShapePipeline::Slot::MAP::ALBEDO));
-            slotBindings.insert(gpu::Shader::Binding(std::string("lightingModelBuffer"), render::ShapePipeline::Slot::LIGHTING_MODEL));
-            slotBindings.insert(gpu::Shader::Binding(std::string("keyLightBuffer"), render::ShapePipeline::Slot::KEY_LIGHT));
-            slotBindings.insert(gpu::Shader::Binding(std::string("lightAmbientBuffer"), render::ShapePipeline::Slot::LIGHT_AMBIENT_BUFFER));
-            slotBindings.insert(gpu::Shader::Binding(std::string("skyboxMap"), render::ShapePipeline::Slot::MAP::LIGHT_AMBIENT_MAP));
-            slotBindings.insert(gpu::Shader::Binding(std::string("fadeMaskMap"), render::ShapePipeline::Slot::MAP::FADE_MASK));
-            gpu::Shader::makeProgram(*_simpleFadeShader, slotBindings);
-            gpu::Shader::makeProgram(*_unlitFadeShader, slotBindings);
+            using namespace shader::render_utils::program;
+            _simpleFadeShader = gpu::Shader::createProgram(DISABLE_DEFERRED ? forward_simple_textured : simple_textured_fade);
+            _unlitFadeShader = gpu::Shader::createProgram(DISABLE_DEFERRED ? forward_simple_textured_unlit : simple_textured_unlit_fade);
         });
     }
 
@@ -2348,8 +2234,14 @@ gpu::PipelinePointer GeometryCache::getSimplePipeline(bool textured, bool transp
         PrepareStencil::testMaskDrawShapeNoAA(*state);
     }
 
-    gpu::ShaderPointer program = (config.isUnlit()) ? (config.isFading() ? _unlitFadeShader : _unlitShader) :
-                                                      (config.isFading() ? _simpleFadeShader : (config.isTransparent() ? _transparentShader : _simpleShader));
+    gpu::ShaderPointer program;
+    if (config.isForward()) {
+        program = (config.isUnlit()) ? (config.isFading() ? _unlitFadeShader : _forwardUnlitShader) :
+                                       (config.isFading() ? _simpleFadeShader : (config.isTransparent() ? _forwardTransparentShader : _forwardSimpleShader));
+    } else {
+        program = (config.isUnlit()) ? (config.isFading() ? _unlitFadeShader : _unlitShader) :
+                                       (config.isFading() ? _simpleFadeShader : (config.isTransparent() ? _transparentShader : _simpleShader));
+    }
     gpu::PipelinePointer pipeline = gpu::Pipeline::create(program, state);
     _simplePrograms.insert(config, pipeline);
     return pipeline;

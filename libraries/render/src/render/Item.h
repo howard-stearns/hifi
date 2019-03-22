@@ -149,6 +149,7 @@ public:
         Builder& withTypeMeta() { _flags.set(TYPE_META); return (*this); }
         Builder& withTransparent() { _flags.set(TRANSLUCENT); return (*this); }
         Builder& withViewSpace() { _flags.set(VIEW_SPACE); return (*this); }
+        Builder& withoutViewSpace() { _flags.reset(VIEW_SPACE); return (*this); }
         Builder& withDynamic() { _flags.set(DYNAMIC); return (*this); }
         Builder& withDeformed() { _flags.set(DEFORMED); return (*this); }
         Builder& withInvisible() { _flags.set(INVISIBLE); return (*this); }
@@ -320,6 +321,7 @@ inline QDebug operator<<(QDebug debug, const ItemFilter& me) {
 // Handy type to just pass the ID and the bound of an item
 class ItemBound {
     public:
+        ItemBound() {}
         ItemBound(ItemID id) : id(id) { }
         ItemBound(ItemID id, const AABox& bound) : id(id), bound(bound) { }
 
@@ -478,8 +480,8 @@ public:
 protected:
     PayloadPointer _payload;
     ItemKey _key;
-    ItemCell _cell{ INVALID_CELL };
-    Index _transitionId{ INVALID_INDEX };
+    ItemCell _cell { INVALID_CELL };
+    Index _transitionId { INVALID_INDEX };
 
     friend class Scene;
 };
@@ -529,6 +531,7 @@ public:
     typedef UpdateFunctor<T> Updater;
 
     Payload(const DataPointer& data) : _data(data) {}
+    virtual ~Payload() = default;
 
     // Payload general interface
     virtual const ItemKey getKey() const override { return payloadGetKey<T>(_data); }

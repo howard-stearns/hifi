@@ -43,12 +43,14 @@ class OffscreenQmlSurface;
  *
  * @hifi-interface
  * @hifi-client-entity
+ * @hifi-avatar
  */
 /**jsdoc
  * @namespace tabletInterface
  *
  * @hifi-interface
  * @hifi-client-entity
+ * @hifi-avatar
  *
  * @deprecated This API is deprecated and will be removed. Use {@link Tablet} instead.
  */
@@ -208,6 +210,7 @@ Q_DECLARE_METATYPE(TabletButtonsProxyModel*);
   *
  * @hifi-interface
  * @hifi-client-entity
+ * @hifi-avatar
  *
  * @property {string} name - Name of this tablet. <em>Read-only.</em>
  * @property {boolean} toolbarMode - Used to transition this tablet into and out of toolbar mode.
@@ -232,6 +235,7 @@ public:
     const QString getName() const { return _name; }
     bool getToolbarMode() const { return _toolbarMode; }
     void setToolbarMode(bool toolbarMode);
+    void unfocus();
 
     /**jsdoc
      * @function TabletProxy#gotoMenuScreen
@@ -307,6 +311,12 @@ public:
      * @returns {boolean}
      */
     Q_INVOKABLE bool isMessageDialogOpen();
+
+    /**jsdoc
+    * Close any open dialogs.
+    * @function TabletProxy#closeDialog
+    */
+    Q_INVOKABLE void closeDialog();
 
     /**jsdoc
      * Creates a new button, adds it to this and returns it.
@@ -437,6 +447,9 @@ protected:
     bool _showRunningScripts { false };
 
     TabletButtonListModel _buttons;
+
+private:
+    void stopQMLSource();
 };
 
 Q_DECLARE_METATYPE(TabletProxy*);
@@ -446,6 +459,7 @@ Q_DECLARE_METATYPE(TabletProxy*);
  *
  * @hifi-interface
  * @hifi-client-entity
+ * @hifi-avatar
  *
  * @property {Uuid} uuid - Uniquely identifies this button. <em>Read-only.</em>
  * @property {TabletButtonProxy.ButtonProperties} properties

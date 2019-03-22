@@ -13,8 +13,11 @@
 #define hifi_Android_Helper_h
 
 #include <QObject>
-#include <QThread>
-#include <AccountManager.h>
+#include <QMap>
+#include <QUrl>
+
+#include <QNetworkReply>
+#include <QtCore/QEventLoop>
 
 class AndroidHelper : public QObject {
     Q_OBJECT
@@ -23,34 +26,47 @@ public:
             static AndroidHelper instance;
             return instance;
     }
-    void init();
-    void requestActivity(const QString &activityName, const bool backToScene);
+    void requestActivity(const QString &activityName, const bool backToScene, QMap<QString, QString> args = QMap<QString, QString>());
     void notifyLoadComplete();
     void notifyEnterForeground();
+    void notifyBeforeEnterBackground();
     void notifyEnterBackground();
+    void notifyToggleAwayMode();
 
     void performHapticFeedback(int duration);
+    void processURL(const QString &url);
+    void notifyHeadsetOn(bool pluggedIn);
+    void muteMic();
 
-    QSharedPointer<AccountManager> getAccountManager() { return _accountManager; }
     AndroidHelper(AndroidHelper const&)  = delete;
     void operator=(AndroidHelper const&) = delete;
 
-public slots:
-    void showLoginDialog();
+    void signup(QString email, QString username, QString password);
+    QString getDisplayName();
+    void setDisplayName(const QString &displayName);
+    void setMyAvatarUrl(const QString &avatarUrl);
 
+public slots:
+    void showLoginDialog(QUrl url);
+    void signupCompleted(QNetworkReply* reply);
+    void signupFailed(QNetworkReply* reply);
 signals:
-    void androidActivityRequested(const QString &activityName, const bool backToScene);
+    void androidActivityRequested(const QString &activityName, const bool backToScene, QMap<QString, QString> args = QMap<QString, QString>());
     void qtAppLoadComplete();
     void enterForeground();
+    void beforeEnterBackground();
     void enterBackground();
-
+    void toggleAwayMode();
     void hapticFeedbackRequested(int duration);
+
+    void handleSignupCompleted();
+    void handleSignupFailed(QString errorString);
 
 private:
     AndroidHelper();
     ~AndroidHelper();
-    QSharedPointer<AccountManager> _accountManager;
-    QThread workerThread;
+
+    QString errorStringFromAPIObject(const QJsonValue& apiObject);
 };
 
 #endif

@@ -22,12 +22,12 @@ public: \
 private: \
     type _##name{ initialValue };
 
-
 /**jsdoc
  * @namespace Stats
  *
  * @hifi-interface
  * @hifi-client-entity
+ * @hifi-avatar
  * @hifi-server-entity
  * @hifi-assignment-client
  *
@@ -49,7 +49,10 @@ private: \
  * @property {number} presentdroprate - <em>Read-only.</em>
  * @property {number} gameLoopRate - <em>Read-only.</em>
  * @property {number} avatarCount - <em>Read-only.</em>
+ * @property {number} heroAvatarCount - <em>Read-only.</em>
+ * @property {number} physicsObjectCount - <em>Read-only.</em>
  * @property {number} updatedAvatarCount - <em>Read-only.</em>
+ * @property {number} updatedHeroAvatarCount - <em>Read-only.</em>
  * @property {number} notUpdatedAvatarCount - <em>Read-only.</em>
  * @property {number} packetInCount - <em>Read-only.</em>
  * @property {number} packetOutCount - <em>Read-only.</em>
@@ -84,6 +87,7 @@ private: \
  * @property {number} audioPacketLoss - <em>Read-only.</em>
  * @property {string} audioCodec - <em>Read-only.</em>
  * @property {string} audioNoiseGate - <em>Read-only.</em>
+ * @property {Vec2} audioInjectors - <em>Read-only.</em>
  * @property {number} entityPacketsInKbps - <em>Read-only.</em>
  *
  * @property {number} downloads - <em>Read-only.</em>
@@ -93,7 +97,6 @@ private: \
  * @property {number} processing - <em>Read-only.</em>
  * @property {number} processingPending - <em>Read-only.</em>
  * @property {number} triangles - <em>Read-only.</em>
- * @property {number} quads - <em>Read-only.</em>
  * @property {number} materialSwitches - <em>Read-only.</em>
  * @property {number} itemConsidered - <em>Read-only.</em>
  * @property {number} itemOutOfView - <em>Read-only.</em>
@@ -167,6 +170,15 @@ private: \
  * @property {number} implicitHeight
  *
  * @property {object} layer - <em>Read-only.</em>
+
+ * @property {number} stylusPicksCount - <em>Read-only.</em>
+ * @property {number} rayPicksCount - <em>Read-only.</em>
+ * @property {number} parabolaPicksCount - <em>Read-only.</em>
+ * @property {number} collisionPicksCount - <em>Read-only.</em>
+ * @property {Vec3} stylusPicksUpdated - <em>Read-only.</em>
+ * @property {Vec3} rayPicksUpdated - <em>Read-only.</em>
+ * @property {Vec3} parabolaPicksUpdated - <em>Read-only.</em>
+ * @property {Vec3} collisionPicksUpdated - <em>Read-only.</em>
  */
 // Properties from x onwards are QQuickItem properties.
 
@@ -194,7 +206,10 @@ class Stats : public QQuickItem {
     STATS_PROPERTY(float, presentdroprate, 0)
     STATS_PROPERTY(int, gameLoopRate, 0)
     STATS_PROPERTY(int, avatarCount, 0)
+    STATS_PROPERTY(int, heroAvatarCount, 0)
+    STATS_PROPERTY(int, physicsObjectCount, 0)
     STATS_PROPERTY(int, updatedAvatarCount, 0)
+    STATS_PROPERTY(int, updatedHeroAvatarCount, 0)
     STATS_PROPERTY(int, notUpdatedAvatarCount, 0)
     STATS_PROPERTY(int, packetInCount, 0)
     STATS_PROPERTY(int, packetOutCount, 0)
@@ -229,6 +244,7 @@ class Stats : public QQuickItem {
     STATS_PROPERTY(int, audioPacketLoss, 0)
     STATS_PROPERTY(QString, audioCodec, QString())
     STATS_PROPERTY(QString, audioNoiseGate, QString())
+    STATS_PROPERTY(QVector2D, audioInjectors, QVector2D());
     STATS_PROPERTY(int, entityPacketsInKbps, 0)
 
     STATS_PROPERTY(int, downloads, 0)
@@ -238,7 +254,7 @@ class Stats : public QQuickItem {
     STATS_PROPERTY(int, processing, 0)
     STATS_PROPERTY(int, processingPending, 0)
     STATS_PROPERTY(int, triangles, 0)
-    STATS_PROPERTY(int, quads, 0)
+    STATS_PROPERTY(int, drawcalls, 0)
     STATS_PROPERTY(int, materialSwitches, 0)
     STATS_PROPERTY(int, itemConsidered, 0)
     STATS_PROPERTY(int, itemOutOfView, 0)
@@ -276,10 +292,21 @@ class Stats : public QQuickItem {
     STATS_PROPERTY(int, gpuTextureExternalMemory, 0)
     STATS_PROPERTY(QString, gpuTextureMemoryPressureState, QString())
     STATS_PROPERTY(int, gpuFreeMemory, 0)
+    STATS_PROPERTY(QVector2D, gpuFrameSize, QVector2D(0,0))
     STATS_PROPERTY(float, gpuFrameTime, 0)
+    STATS_PROPERTY(float, gpuFrameTimePerPixel, 0)
     STATS_PROPERTY(float, batchFrameTime, 0)
     STATS_PROPERTY(float, engineFrameTime, 0)
     STATS_PROPERTY(float, avatarSimulationTime, 0)
+
+    STATS_PROPERTY(int, stylusPicksCount, 0)
+    STATS_PROPERTY(int, rayPicksCount, 0)
+    STATS_PROPERTY(int, parabolaPicksCount, 0)
+    STATS_PROPERTY(int, collisionPicksCount, 0)
+    STATS_PROPERTY(QVector3D, stylusPicksUpdated, QVector3D(0, 0, 0))
+    STATS_PROPERTY(QVector3D, rayPicksUpdated, QVector3D(0, 0, 0))
+    STATS_PROPERTY(QVector3D, parabolaPicksUpdated, QVector3D(0, 0, 0))
+    STATS_PROPERTY(QVector3D, collisionPicksUpdated, QVector3D(0, 0, 0))
 
 public:
     static Stats* getInstance();
@@ -402,6 +429,13 @@ signals:
     void gameLoopRateChanged();
 
     /**jsdoc
+     * Trigered when
+     * @function Stats.numPhysicsBodiesChanged
+     * @returns {Signal}
+     */
+    void physicsObjectCountChanged();
+
+    /**jsdoc
      * Triggered when the value of the <code>avatarCount</code> property changes.
      * @function Stats.avatarCountChanged
      * @returns {Signal}
@@ -409,11 +443,25 @@ signals:
     void avatarCountChanged();
 
     /**jsdoc
+     * Triggered when the value of the <code>heroAvatarCount</code> property changes.
+     * @function Stats.heroAvatarCountChanged
+     * @returns {Signal}
+     */
+    void heroAvatarCountChanged();
+
+    /**jsdoc
      * Triggered when the value of the <code>updatedAvatarCount</code> property changes.
      * @function Stats.updatedAvatarCountChanged
      * @returns {Signal}
      */
     void updatedAvatarCountChanged();
+
+    /**jsdoc
+     * Triggered when the value of the <code>updatedHeroAvatarCount</code> property changes.
+     * @function Stats.updatedHeroAvatarCountChanged
+     * @returns {Signal}
+     */
+    void updatedHeroAvatarCountChanged();
 
     /**jsdoc
      * Triggered when the value of the <code>notUpdatedAvatarCount</code> property changes.
@@ -647,6 +695,13 @@ signals:
     void audioNoiseGateChanged();
 
     /**jsdoc
+     * Triggered when the value of the <code>audioInjectors</code> property changes.
+     * @function Stats.audioInjectorsChanged
+     * @returns {Signal}
+     */
+    void audioInjectorsChanged();
+
+    /**jsdoc
      * Triggered when the value of the <code>entityPacketsInKbps</code> property changes.
      * @function Stats.entityPacketsInKbpsChanged
      * @returns {Signal}
@@ -704,11 +759,12 @@ signals:
     void trianglesChanged();
 
     /**jsdoc
-     * Triggered when the value of the <code>quads</code> property changes.
-     * @function Stats.quadsChanged
-     * @returns {Signal}
-     */
-    void quadsChanged();
+    * Triggered when the value of the <code>drawcalls</code> property changes.
+    * This 
+    * @function Stats.drawcallsChanged
+    * @returns {Signal}
+    */
+    void drawcallsChanged();
 
     /**jsdoc
      * Triggered when the value of the <code>materialSwitches</code> property changes.
@@ -963,6 +1019,20 @@ signals:
     void gpuFrameTimeChanged();
 
     /**jsdoc
+     * Triggered when the value of the <code>gpuFrameTime</code> property changes.
+     * @function Stats.gpuFrameTimeChanged
+     * @returns {Signal}
+     */
+    void gpuFrameSizeChanged();
+
+    /**jsdoc
+     * Triggered when the value of the <code>gpuFrameTime</code> property changes.
+     * @function Stats.gpuFrameTimeChanged
+     * @returns {Signal}
+     */
+    void gpuFrameTimePerPixelChanged();
+
+    /**jsdoc
      * Triggered when the value of the <code>batchFrameTime</code> property changes.
      * @function Stats.batchFrameTimeChanged
      * @returns {Signal}
@@ -997,7 +1067,6 @@ signals:
      */
     void decimatedTextureCountChanged();
 
-    
     // QQuickItem signals.
 
     /**jsdoc
@@ -1218,6 +1287,62 @@ signals:
     /**jsdoc
      * @function Stats.update
      */
+
+    /**jsdoc
+     * Triggered when the value of the <code>stylusPicksCount</code> property changes.
+     * @function Stats.stylusPicksCountChanged
+     * @returns {Signal}
+     */
+    void stylusPicksCountChanged();
+
+    /**jsdoc
+     * Triggered when the value of the <code>rayPicksCount</code> property changes.
+     * @function Stats.rayPicksCountChanged
+     * @returns {Signal}
+     */
+    void rayPicksCountChanged();
+
+    /**jsdoc
+     * Triggered when the value of the <code>parabolaPicksCount</code> property changes.
+     * @function Stats.parabolaPicksCountChanged
+     * @returns {Signal}
+     */
+    void parabolaPicksCountChanged();
+
+    /**jsdoc
+     * Triggered when the value of the <code>collisionPicksCount</code> property changes.
+     * @function Stats.collisionPicksCountChanged
+     * @returns {Signal}
+     */
+    void collisionPicksCountChanged();
+
+    /**jsdoc
+     * Triggered when the value of the <code>stylusPicksUpdated</code> property changes.
+     * @function Stats.stylusPicksUpdatedChanged
+     * @returns {Signal}
+     */
+    void stylusPicksUpdatedChanged();
+
+    /**jsdoc
+     * Triggered when the value of the <code>rayPicksUpdated</code> property changes.
+     * @function Stats.rayPicksUpdatedChanged
+     * @returns {Signal}
+     */
+    void rayPicksUpdatedChanged();
+
+    /**jsdoc
+     * Triggered when the value of the <code>parabolaPicksUpdated</code> property changes.
+     * @function Stats.parabolaPicksUpdatedChanged
+     * @returns {Signal}
+     */
+    void parabolaPicksUpdatedChanged();
+
+    /**jsdoc
+     * Triggered when the value of the <code>collisionPicksUpdated</code> property changes.
+     * @function Stats.collisionPicksUpdatedChanged
+     * @returns {Signal}
+     */
+    void collisionPicksUpdatedChanged();
 
 private:
     int _recentMaxPackets{ 0 } ; // recent max incoming voxel packets to process

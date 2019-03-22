@@ -49,6 +49,7 @@
 #include <shared/ReadWriteLockable.h>
 
 #include "SecurityImageProvider.h"
+#include "shared/FileUtils.h"
 #include "types/FileTypeProfile.h"
 #include "types/HFWebEngineProfile.h"
 #include "types/SoundEffect.h"
@@ -237,7 +238,12 @@ void OffscreenQmlSurface::clearFocusItem() {
 
 void OffscreenQmlSurface::initializeEngine(QQmlEngine* engine) {
     Parent::initializeEngine(engine);
-    new QQmlFileSelector(engine);
+    auto fileSelector = QQmlFileSelector::get(engine);
+    if (!fileSelector) {
+        fileSelector = new QQmlFileSelector(engine);
+    }
+    fileSelector->setExtraSelectors(FileUtils::getFileSelectors());
+
     static std::once_flag once;
     std::call_once(once, [] { 
         qRegisterMetaType<TabletProxy*>();
@@ -250,6 +256,7 @@ void OffscreenQmlSurface::initializeEngine(QQmlEngine* engine) {
 
     engine->setNetworkAccessManagerFactory(new QmlNetworkAccessManagerFactory);
     auto importList = engine->importPathList();
+    importList.insert(importList.begin(), PathUtils::resourcesPath() + "qml/");
     importList.insert(importList.begin(), PathUtils::resourcesPath());
     engine->setImportPathList(importList);
     for (const auto& path : importList) {
@@ -265,19 +272,6 @@ void OffscreenQmlSurface::initializeEngine(QQmlEngine* engine) {
     if (!javaScriptToInject.isEmpty()) {
         rootContext->setContextProperty("eventBridgeJavaScriptToInject", QVariant(javaScriptToInject));
     }
-#if !defined(Q_OS_ANDROID)
-    rootContext->setContextProperty("FileTypeProfile", new FileTypeProfile(rootContext));
-    rootContext->setContextProperty("HFWebEngineProfile", new HFWebEngineProfile(rootContext));
-    {
-        PROFILE_RANGE(startup, "FileTypeProfile");
-        rootContext->setContextProperty("FileTypeProfile", new FileTypeProfile(rootContext));
-    }
-    {
-        PROFILE_RANGE(startup, "HFWebEngineProfile");
-        rootContext->setContextProperty("HFWebEngineProfile", new HFWebEngineProfile(rootContext));
-        
-    }
-#endif
     rootContext->setContextProperty("Paths", DependencyManager::get<PathUtils>().data());
     rootContext->setContextProperty("Tablet", DependencyManager::get<TabletScriptingInterface>().data());
     rootContext->setContextProperty("Toolbars", DependencyManager::get<ToolbarScriptingInterface>().data());
@@ -300,6 +294,17 @@ void OffscreenQmlSurface::onRootContextCreated(QQmlContext* qmlContext) {
     // FIXME Compatibility mechanism for existing HTML and JS that uses eventBridgeWrapper
     // Find a way to flag older scripts using this mechanism and wanr that this is deprecated
     qmlContext->setContextProperty("eventBridgeWrapper", new EventBridgeWrapper(this, qmlContext));
+#if !defined(Q_OS_ANDROID)
+    {
+        PROFILE_RANGE(startup, "FileTypeProfile");
+        FileTypeProfile::registerWithContext(qmlContext);
+    }
+    {
+        PROFILE_RANGE(startup, "HFWebEngineProfile");
+        HFWebEngineProfile::registerWithContext(qmlContext);
+
+    }
+#endif
 }
 
 QQmlContext* OffscreenQmlSurface::contextForUrl(const QUrl& qmlSource, QQuickItem* parent, bool forceNewContext) {
@@ -331,8 +336,7 @@ void OffscreenQmlSurface::onRootCreated() {
     getSurfaceContext()->setContextProperty("offscreenWindow", QVariant::fromValue(getWindow()));
 
     // Connect with the audio client and listen for audio device changes
-    auto audioIO = DependencyManager::get<AudioClient>();
-    connect(audioIO.data(), &AudioClient::deviceChanged, this, [&](QAudio::Mode mode, const QAudioDeviceInfo& device) {
+    connect(DependencyManager::get<AudioClient>().data(), &AudioClient::deviceChanged, this, [this](QAudio::Mode mode, const QAudioDeviceInfo& device) {
         if (mode == QAudio::Mode::AudioOutput) {
             QMetaObject::invokeMethod(this, "changeAudioOutputDevice", Qt::QueuedConnection, Q_ARG(QString, device.deviceName()));
         }
@@ -426,11 +430,17 @@ PointerEvent::EventType OffscreenQmlSurface::choosePointerEventType(QEvent::Type
 }
 
 void OffscreenQmlSurface::hoverBeginEvent(const PointerEvent& event, class QTouchDevice& device) {
+#if defined(DISABLE_QML)
+    return;
+#endif
     handlePointerEvent(event, device);
     _activeTouchPoints[event.getID()].hovering = true;
 }
 
 void OffscreenQmlSurface::hoverEndEvent(const PointerEvent& event, class QTouchDevice& device) {
+#if defined(DISABLE_QML)
+    return;
+#endif
     _activeTouchPoints[event.getID()].hovering = false;
     // Send a fake mouse move event if
     // - the event told us to
@@ -444,6 +454,10 @@ void OffscreenQmlSurface::hoverEndEvent(const PointerEvent& event, class QTouchD
 }
 
 bool OffscreenQmlSurface::handlePointerEvent(const PointerEvent& event, class QTouchDevice& device, bool release) {
+#if defined(DISABLE_QML)
+    return false;
+#endif
+
     // Ignore mouse interaction if we're paused
     if (!getRootItem() || isPaused()) {
         return false;
@@ -705,11 +719,7 @@ void OffscreenQmlSurface::setKeyboardRaised(QObject* object, bool raised, bool n
 }
 
 void OffscreenQmlSurface::emitScriptEvent(const QVariant& message) {
-    if (QThread::currentThread() != thread()) {
-        QMetaObject::invokeMethod(this, "emitScriptEvent", Qt::QueuedConnection, Q_ARG(QVariant, message));
-    } else {
-        emit scriptEventReceived(message);
-    }
+    emit scriptEventReceived(message);
 }
 
 void OffscreenQmlSurface::emitWebEvent(const QVariant& message) {

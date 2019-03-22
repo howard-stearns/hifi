@@ -43,6 +43,11 @@ namespace khronos { namespace gl { namespace texture {
 
 namespace gpu {
 
+enum class BackendTarget {
+    GL41,
+    GL45,
+    GLES32
+};
 
 const std::string SOURCE_HASH_KEY { "hifi.sourceHash" };
 
@@ -82,7 +87,7 @@ public:
 
     void assignPreset(int p);
 
-    void evalFromTexture(const Texture& texture);
+    void evalFromTexture(const Texture& texture, gpu::BackendTarget target);
 };
 typedef std::shared_ptr< SphericalHarmonics > SHPointer;
 
@@ -184,6 +189,8 @@ public:
     }
 protected:
     Desc _desc;
+
+    friend class Deserializer;
 };
 
 enum class TextureUsageType : uint8 {
@@ -366,6 +373,8 @@ public:
 
         ktx::KTXDescriptorPointer _ktxDescriptor;
         friend class Texture;
+        friend class Serializer;
+        friend class Deserializer;
     };
 
     uint16 minAvailableMipLevel() const { return _storage->minAvailableMipLevel(); };
@@ -374,9 +383,13 @@ public:
     static const uint16 SINGLE_MIP = 1;
     static TexturePointer create1D(const Element& texelFormat, uint16 width, uint16 numMips = SINGLE_MIP, const Sampler& sampler = Sampler());
     static TexturePointer create2D(const Element& texelFormat, uint16 width, uint16 height, uint16 numMips = SINGLE_MIP, const Sampler& sampler = Sampler());
+    static TexturePointer create2DArray(const Element& texelFormat, uint16 width, uint16 height, uint16 numSlices, uint16 numMips = SINGLE_MIP, const Sampler& sampler = Sampler());
     static TexturePointer create3D(const Element& texelFormat, uint16 width, uint16 height, uint16 depth, uint16 numMips = SINGLE_MIP, const Sampler& sampler = Sampler());
     static TexturePointer createCube(const Element& texelFormat, uint16 width, uint16 numMips = 1, const Sampler& sampler = Sampler());
     static TexturePointer createRenderBuffer(const Element& texelFormat, uint16 width, uint16 height, uint16 numMips = SINGLE_MIP, const Sampler& sampler = Sampler());
+    static TexturePointer createRenderBufferMultisample(const Element& texelFormat, uint16 width, uint16 height, uint16 numSamples, const Sampler& sampler = Sampler());
+    static TexturePointer createRenderBufferArray(const Element& texelFormat, uint16 width, uint16 height, uint16 numSlices, uint16 numMips = SINGLE_MIP, const Sampler& sampler = Sampler());
+    static TexturePointer createRenderBufferMultisampleArray(const Element& texelFormat, uint16 width, uint16 height, uint16 numSlices, uint16 numSamples, const Sampler& sampler = Sampler());
     static TexturePointer createStrict(const Element& texelFormat, uint16 width, uint16 height, uint16 numMips = SINGLE_MIP, const Sampler& sampler = Sampler());
     static TexturePointer createExternal(const ExternalRecycler& recycler, const Sampler& sampler = Sampler());
 
@@ -384,8 +397,6 @@ public:
     bool isDefined() const { return _defined; }
 
     Texture(TextureUsageType usageType);
-    Texture(const Texture& buf); // deep copy of the sysmem texture
-    Texture& operator=(const Texture& buf); // deep copy of the sysmem texture
     ~Texture();
 
     Stamp getStamp() const { return _stamp; }
@@ -424,6 +435,7 @@ public:
     uint16 getNumSamples() const { return _numSamples; }
     // NumSamples can only have certain values based on the hw
     static uint16 evalNumSamplesUsed(uint16 numSamplesTried);
+    bool isMultisample() const { return _numSamples > 1; }
 
     // max mip is in the range [ 0 if no sub mips, log2(max(width, height, depth))]
     // It is defined at creation time (immutable)
@@ -539,7 +551,7 @@ public:
     Usage getUsage() const { return _usage; }
 
     // For Cube Texture, it's possible to generate the irradiance spherical harmonics and make them availalbe with the texture
-    bool generateIrradiance();
+    bool generateIrradiance(gpu::BackendTarget target);
     const SHPointer& getIrradiance(uint16 slice = 0) const { return _irradiance; }
     void overrideIrradiance(SHPointer irradiance) { _irradiance = irradiance; }
     bool isIrradianceValid() const { return _isIrradianceValid; }
@@ -621,6 +633,9 @@ protected:
     static TexturePointer create(TextureUsageType usageType, Type type, const Element& texelFormat, uint16 width, uint16 height, uint16 depth, uint16 numSamples, uint16 numSlices, uint16 numMips, const Sampler& sampler);
 
     Size resize(Type type, const Element& texelFormat, uint16 width, uint16 height, uint16 depth, uint16 numSamples, uint16 numSlices, uint16 numMips);
+
+    friend class Serializer;
+    friend class Deserializer;
 };
 
 typedef std::shared_ptr<Texture> TexturePointer;
@@ -676,8 +691,10 @@ class TextureSource {
 public:
     TextureSource(const QUrl& url, int type = 0) : _imageUrl(url), _type(type) {}
 
+    void setUrl(const QUrl& url) { _imageUrl = url; }
     const QUrl& getUrl() const { return _imageUrl; }
     const gpu::TexturePointer getGPUTexture() const { return _gpuTexture; }
+    void setType(int type) { _type = type; }
     int getType() const { return _type; }
 
     void resetTexture(gpu::TexturePointer texture);

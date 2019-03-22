@@ -77,6 +77,15 @@ PickResultPointer PointerManager::getPrevPickResult(unsigned int uid) const {
     return result;
 }
 
+QVariantMap PointerManager::getPointerProperties(unsigned int uid) const {
+    auto pointer = find(uid);
+    if (pointer) {
+        return pointer->toVariantMap();
+    } else {
+        return QVariantMap();
+    }
+}
+
 void PointerManager::update() {
     auto cachedPointers = resultWithReadLock<std::unordered_map<unsigned int, std::shared_ptr<Pointer>>>([&] {
         return _pointers;
@@ -115,10 +124,10 @@ void PointerManager::setLength(unsigned int uid, float length) const {
     }
 }
 
-void PointerManager::setLockEndUUID(unsigned int uid, const QUuid& objectID, bool isOverlay, const glm::mat4& offsetMat) const {
+void PointerManager::setLockEndUUID(unsigned int uid, const QUuid& objectID, bool isAvatar, const glm::mat4& offsetMat) const {
     auto pointer = find(uid);
     if (pointer) {
-        pointer->setLockEndUUID(objectID, isOverlay, offsetMat);
+        pointer->setLockEndUUID(objectID, isAvatar, offsetMat);
     }
 }
 

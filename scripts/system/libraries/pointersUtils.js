@@ -7,17 +7,14 @@
 
 /* jslint bitwise: true */
 
-/* global Script, Entities, Overlays, Controller, Vec3, Quat, getControllerWorldLocation, RayPick,
-   controllerDispatcherPlugins:true, controllerDispatcherPluginsNeedSort:true,
-   LEFT_HAND, RIGHT_HAND, NEAR_GRAB_PICK_RADIUS, DEFAULT_SEARCH_SPHERE_DISTANCE, DISPATCHER_PROPERTIES,
-   getGrabPointSphereOffset, HMD, MyAvatar, Messages, findHandChildEntities, Pointers, PickType, COLORS_GRAB_SEARCHING_HALF_SQUEEZE
-   COLORS_GRAB_SEARCHING_FULL_SQUEEZE, COLORS_GRAB_DISTANCE_HOLD, Picks, TRIGGER_ON_VALUE
+/* global Script, Pointers,
+   DEFAULT_SEARCH_SPHERE_DISTANCE, COLORS_GRAB_SEARCHING_HALF_SQUEEZE, COLORS_GRAB_SEARCHING_FULL_SQUEEZE,
+   COLORS_GRAB_DISTANCE_HOLD, TRIGGER_ON_VALUE,
+   Pointer:true, PointerManager:true
 */
-
 
 Script.include("/~/system/libraries/controllerDispatcherUtils.js");
 Pointer = function(hudLayer, pickType, pointerData) {
-    var _this = this;
     this.SEARCH_SPHERE_SIZE = 0.0132;
     this.dim = {x: this.SEARCH_SPHERE_SIZE, y: this.SEARCH_SPHERE_SIZE, z: this.SEARCH_SPHERE_SIZE};
     this.halfPath = {
@@ -148,7 +145,7 @@ Pointer = function(hudLayer, pickType, pointerData) {
                 mode = "hold";
             } else if (triggerClicks[this.hand]) {
                 mode = "full";
-            } else if (triggerValues[this.hand] > TRIGGER_ON_VALUE || this.allwaysOn) {
+            } else if (triggerValues[this.hand] > TRIGGER_ON_VALUE || this.alwaysOn) {
                 mode = "half";
             }
         }
@@ -174,7 +171,7 @@ PointerManager = function() {
         var index = laserParams.hand;
         if (index < this.pointers.length && index >= 0) {
             this.pointers[index].makeVisible();
-            this.pointers[index].allwaysOn = laserParams.allwaysOn;
+            this.pointers[index].alwaysOn = laserParams.alwaysOn;
         }
     };
 

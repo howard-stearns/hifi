@@ -32,7 +32,7 @@ if (!Function.prototype.bind) {
 
         if (this.prototype) {
             // Function.prototype doesn't have a prototype property
-            fNOP.prototype = this.prototype; 
+            fNOP.prototype = this.prototype;
         }
         fBound.prototype = new fNOP();
 
@@ -102,7 +102,6 @@ getEntityUserData = function(id) {
             results = JSON.parse(properties.userData);
         } catch(err) {
             logDebug(err);
-            logDebug(properties.userData);
         }
     }
     return results ? results : {};
@@ -356,13 +355,14 @@ getTabletWidthFromSettings = function () {
     var DEFAULT_TABLET_WIDTH = 0.4375;
     var tablet = Tablet.getTablet("com.highfidelity.interface.tablet.system");
     var toolbarMode = tablet.toolbarMode;
-    var DEFAULT_TABLET_SCALE = 70;
-    var tabletScalePercentage = DEFAULT_TABLET_SCALE;
+    var DEFAULT_DESKTOP_TABLET_SCALE = 75;
+    var DEFAULT_HMD_TABLET_SCALE = 60;
+    var tabletScalePercentage = DEFAULT_HMD_TABLET_SCALE;
     if (!toolbarMode) {
         if (HMD.active) {
-            tabletScalePercentage = Settings.getValue("hmdTabletScale") || DEFAULT_TABLET_SCALE;
+            tabletScalePercentage = Settings.getValue("hmdTabletScale") || DEFAULT_HMD_TABLET_SCALE;
         } else {
-            tabletScalePercentage = Settings.getValue("desktopTabletScale") || DEFAULT_TABLET_SCALE;
+            tabletScalePercentage = Settings.getValue("desktopTabletScale") || DEFAULT_DESKTOP_TABLET_SCALE;
         }
     }
     return DEFAULT_TABLET_WIDTH * (tabletScalePercentage / 100);
@@ -381,6 +381,7 @@ resizeTablet = function (width, newParentJointIndex, sensorToWorldScaleOverride)
         sensorScaleOffsetOverride = 1 / sensorScaleFactor;
     }
 
+
     // will need to be recaclulated if dimensions of fbx model change.
     var TABLET_NATURAL_DIMENSIONS = {x: 32.083, y: 48.553, z: 2.269};
     var DEFAULT_DPI = 31;
@@ -394,40 +395,99 @@ resizeTablet = function (width, newParentJointIndex, sensorToWorldScaleOverride)
     var tabletDpi = DEFAULT_DPI * (DEFAULT_WIDTH / tabletWidth);
 
     // update tablet model dimensions
-    Overlays.editOverlay(HMD.tabletID, {
+    Entities.editEntity(HMD.tabletID, {
         dimensions: { x: tabletWidth, y: tabletHeight, z: tabletDepth }
     });
 
     // update webOverlay
-    var RAYPICK_OFFSET = 0.0007; // Sufficient for raypick to reliably intersect tablet screen before tablet model.
-    var WEB_ENTITY_Z_OFFSET = (tabletDepth / 2.0) * sensorScaleOffsetOverride + RAYPICK_OFFSET;
-    var WEB_ENTITY_Y_OFFSET = 1 * tabletScaleFactor;
-    print(WEB_ENTITY_Y_OFFSET);
-    var screenWidth = 0.9275 * tabletWidth;
-    var screenHeight = 0.8983 * tabletHeight;
+    var WEB_ENTITY_Z_OFFSET = (tabletDepth / 2.5) * sensorScaleOffsetOverride;
+    var WEB_ENTITY_Y_OFFSET = 1.25 * tabletScaleFactor * sensorScaleOffsetOverride;
+    var screenWidth = 0.9367 * tabletWidth;
+    var screenHeight = 0.9000 * tabletHeight;
     var landscape = Tablet.getTablet("com.highfidelity.interface.tablet.system").landscape;
-    Overlays.editOverlay(HMD.tabletScreenID, {
-        localPosition: { x: 0, y: WEB_ENTITY_Y_OFFSET, z: -WEB_ENTITY_Z_OFFSET },
-        dimensions: {x: landscape ? screenHeight : screenWidth, y: landscape ? screenWidth : screenHeight, z: 0.1},
+    Entities.editEntity(HMD.tabletScreenID, {
+        localPosition: { x: 0, y: WEB_ENTITY_Y_OFFSET, z: -WEB_ENTITY_Z_OFFSET},
+        dimensions: {x: landscape ? screenHeight : screenWidth, y: landscape ? screenWidth : screenHeight, z: 1.0},
         dpi: tabletDpi
     });
 
     // update homeButton
-    var HOME_BUTTON_Y_OFFSET = ((tabletHeight / 2) - (tabletHeight / 20) + 0.003 * sensorScaleFactor) * sensorScaleOffsetOverride;
-    // FIXME: Circle3D overlays currently at the wrong dimensions, so we need to account for that here
-    var homeButtonDim = 4.0 * tabletScaleFactor / 3.0;
-    Overlays.editOverlay(HMD.homeButtonID, {
-        localPosition: { x: 0, y: -HOME_BUTTON_Y_OFFSET, z: -WEB_ENTITY_Z_OFFSET },
-        localRotation: Quat.angleAxis(180, Vec3.UNIT_Y),
+    var homeButtonDim = 4.0 * tabletScaleFactor / 1.5;
+    var HOME_BUTTON_X_OFFSET = 0.00079 * sensorScaleOffsetOverride * sensorScaleFactor;
+    var HOME_BUTTON_Y_OFFSET = -1 * ((tabletHeight / 2) - (4.0 * tabletScaleFactor / 2)) * sensorScaleOffsetOverride;
+    var HOME_BUTTON_Z_OFFSET = (tabletDepth / 1.9) * sensorScaleOffsetOverride;
+    Entities.editEntity(HMD.homeButtonID, {
+        localPosition: { x: HOME_BUTTON_X_OFFSET, y: HOME_BUTTON_Y_OFFSET, z: -HOME_BUTTON_Z_OFFSET },
         dimensions: { x: homeButtonDim, y: homeButtonDim, z: homeButtonDim }
     });
 
-    Overlays.editOverlay(HMD.homeButtonHighlightID, {
-        localPosition: { x: 0, y: -HOME_BUTTON_Y_OFFSET, z: -WEB_ENTITY_Z_OFFSET },
-        localRotation: Quat.angleAxis(180, Vec3.UNIT_Y),
+    Entities.editEntity(HMD.homeButtonHighlightID, {
+        localPosition: { x: -HOME_BUTTON_X_OFFSET, y: HOME_BUTTON_Y_OFFSET, z: -HOME_BUTTON_Z_OFFSET },
         dimensions: { x: homeButtonDim, y: homeButtonDim, z: homeButtonDim }
     });
 };
+
+
+reparentAndScaleTablet = function(width, reparentProps) {
+
+    if (!HMD.tabletID || !HMD.tabletScreenID || !HMD.homeButtonID || !HMD.homeButtonHighlightID) {
+        return;
+    }
+    var sensorScaleFactor = MyAvatar.sensorToWorldScale;
+    var sensorScaleOffsetOverride = 1;
+    var SENSOR_TO_ROOM_MATRIX = 65534;
+    var parentJointIndex = reparentProps.parentJointIndex;
+    if (parentJointIndex === SENSOR_TO_ROOM_MATRIX) {
+        sensorScaleOffsetOverride = 1 / sensorScaleFactor;
+    }
+
+
+    // will need to be recaclulated if dimensions of fbx model change.
+    var TABLET_NATURAL_DIMENSIONS = {x: 32.083, y: 48.553, z: 2.269};
+    var DEFAULT_DPI = 31;
+    var DEFAULT_WIDTH = 0.4375;
+
+    // scale factor of natural tablet dimensions.
+    var tabletWidth = (width || DEFAULT_WIDTH) * sensorScaleFactor;
+    var tabletScaleFactor = tabletWidth / TABLET_NATURAL_DIMENSIONS.x;
+    var tabletHeight = TABLET_NATURAL_DIMENSIONS.y * tabletScaleFactor;
+    var tabletDepth = TABLET_NATURAL_DIMENSIONS.z * tabletScaleFactor;
+    var tabletDpi = DEFAULT_DPI * (DEFAULT_WIDTH / tabletWidth);
+
+    // update tablet model dimensions
+
+    Entities.editEntity(HMD.tabletID, {
+        parentID: reparentProps.parentID,
+        parentJointIndex: reparentProps.parentJointIndex,
+        dimensions: { x: tabletWidth, y: tabletHeight, z: tabletDepth}
+    });
+    // update webOverlay
+    var WEB_ENTITY_Z_OFFSET = (tabletDepth / 2.5) * sensorScaleOffsetOverride;
+    var WEB_ENTITY_Y_OFFSET = 1.25 * tabletScaleFactor * sensorScaleOffsetOverride;
+    var screenWidth = 0.9367 * tabletWidth;
+    var screenHeight = 0.9000 * tabletHeight;
+    var landscape = Tablet.getTablet("com.highfidelity.interface.tablet.system").landscape;
+    Entities.editEntity(HMD.tabletScreenID, {
+        localPosition: { x: 0, y: WEB_ENTITY_Y_OFFSET, z: -WEB_ENTITY_Z_OFFSET},
+        dimensions: {x: landscape ? screenHeight : screenWidth, y: landscape ? screenWidth : screenHeight, z: 1.0},
+        dpi: tabletDpi
+    });
+
+    // update homeButton
+    var homeButtonDim = 4.0 * tabletScaleFactor / 1.5;
+    var HOME_BUTTON_X_OFFSET = 0.00079 * sensorScaleOffsetOverride * sensorScaleFactor;
+    var HOME_BUTTON_Y_OFFSET = -1 * ((tabletHeight / 2) - (4.0 * tabletScaleFactor / 2)) * sensorScaleOffsetOverride;
+    var HOME_BUTTON_Z_OFFSET = (tabletDepth / 1.9) * sensorScaleOffsetOverride;
+    Entities.editEntity(HMD.homeButtonID, {
+        localPosition: { x: HOME_BUTTON_X_OFFSET, y: HOME_BUTTON_Y_OFFSET, z: -HOME_BUTTON_Z_OFFSET },
+        dimensions: { x: homeButtonDim, y: homeButtonDim, z: homeButtonDim }
+    });
+
+    Entities.editEntity(HMD.homeButtonHighlightID, {
+        localPosition: { x: -HOME_BUTTON_X_OFFSET, y: HOME_BUTTON_Y_OFFSET, z: -HOME_BUTTON_Z_OFFSET },
+        dimensions: { x: homeButtonDim, y: homeButtonDim, z: homeButtonDim }
+    });
+}
 
 getMainTabletIDs = function () {
     var tabletIDs = [];

@@ -18,18 +18,31 @@ Q_LOGGING_CATEGORY(gpugl45logging, "hifi.gpu.gl45")
 using namespace gpu;
 using namespace gpu::gl45;
 
+GLint GL45Backend::MAX_COMBINED_SHADER_STORAGE_BLOCKS{ 0 };
+GLint GL45Backend::MAX_UNIFORM_LOCATIONS{ 0 };
+
+static void staticInit() {
+    static std::once_flag once;
+    std::call_once(once, [&] {
+        glGetIntegerv(GL_MAX_COMBINED_SHADER_STORAGE_BLOCKS, &GL45Backend::MAX_COMBINED_SHADER_STORAGE_BLOCKS);
+        glGetIntegerv(GL_MAX_UNIFORM_LOCATIONS, &GL45Backend::MAX_UNIFORM_LOCATIONS);
+    });
+}
 const std::string GL45Backend::GL45_VERSION { "GL45" };
+
+GL45Backend::GL45Backend(bool syncCache) : Parent(syncCache) {
+    staticInit();
+}
+
+GL45Backend::GL45Backend() : Parent() {
+    staticInit();
+}
 
 void GL45Backend::recycle() const {
     Parent::recycle();
 }
 
-void GL45Backend::do_draw(const Batch& batch, size_t paramOffset) {
-    Primitive primitiveType = (Primitive)batch._params[paramOffset + 2]._uint;
-    GLenum mode = gl::PRIMITIVE_TO_GL[primitiveType];
-    uint32 numVertices = batch._params[paramOffset + 1]._uint;
-    uint32 startVertex = batch._params[paramOffset + 0]._uint;
-
+void GL45Backend::draw(GLenum mode, uint32 numVertices, uint32 startVertex) {
     if (isStereo()) {
 #ifdef GPU_STEREO_DRAWCALL_INSTANCED
         glDrawArraysInstanced(mode, startVertex, numVertices, 2);
@@ -50,7 +63,16 @@ void GL45Backend::do_draw(const Batch& batch, size_t paramOffset) {
     }
     _stats._DSNumAPIDrawcalls++;
 
-    (void) CHECK_GL_ERROR();
+    (void)CHECK_GL_ERROR();
+}
+
+void GL45Backend::do_draw(const Batch& batch, size_t paramOffset) {
+    Primitive primitiveType = (Primitive)batch._params[paramOffset + 2]._uint;
+    GLenum mode = gl::PRIMITIVE_TO_GL[primitiveType];
+    uint32 numVertices = batch._params[paramOffset + 1]._uint;
+    uint32 startVertex = batch._params[paramOffset + 0]._uint;
+
+    draw(mode, numVertices, startVertex);
 }
 
 void GL45Backend::do_drawIndexed(const Batch& batch, size_t paramOffset) {

@@ -30,12 +30,12 @@ namespace MenuOption {
     const QString AddressBar = "Show Address Bar";
     const QString Animations = "Animations...";
     const QString AnimDebugDrawAnimPose = "Debug Draw Animation";
+    const QString AnimDebugDrawBaseOfSupport = "Debug Draw Base of Support";
     const QString AnimDebugDrawDefaultPose = "Debug Draw Default Pose";
     const QString AnimDebugDrawPosition= "Debug Draw Position";
     const QString AskToResetSettings = "Ask To Reset Settings on Start";
     const QString AssetMigration = "ATP Asset Migration";
     const QString AssetServer = "Asset Browser";
-    const QString Attachments = "Attachments...";
     const QString AudioScope = "Show Scope";
     const QString AudioScopeFiftyFrames = "Fifty";
     const QString AudioScopeFiveFrames = "Five";
@@ -46,6 +46,7 @@ namespace MenuOption {
     const QString AutoMuteAudio = "Auto Mute Microphone";
     const QString AvatarReceiveStats = "Show Receive Stats";
     const QString AvatarBookmarks = "Avatar Bookmarks";
+    const QString AvatarPackager = "Avatar Packager";
     const QString Back = "Back";
     const QString BinaryEyelidControl = "Binary Eyelid Control";
     const QString BookmarkAvatar = "Bookmark Avatar";
@@ -75,6 +76,7 @@ namespace MenuOption {
     const QString CrashOutOfBoundsVectorAccessThreaded = "Out of Bounds Vector Access (threaded)";
     const QString CrashNewFault = "New Fault";
     const QString CrashNewFaultThreaded = "New Fault (threaded)";
+    const QString CreateEntitiesGrabbable = "Create Entities As Grabbable (except Zones, Particles, and Lights)";
     const QString DeadlockInterface = "Deadlock Interface";
     const QString UnresponsiveInterface = "Unresponsive Interface";
     const QString DecreaseAvatarSize = "Decrease Avatar Size";
@@ -116,9 +118,11 @@ namespace MenuOption {
     const QString FrameTimer = "Show Timer";
     const QString FullscreenMirror = "Mirror";
     const QString Help = "Help...";
+    const QString HomeLocation = "Home ";
     const QString IncreaseAvatarSize = "Increase Avatar Size";
     const QString IndependentMode = "Independent Mode";
     const QString ActionMotorControl = "Enable Default Motor Control";
+    const QString LastLocation = "Last Location";
     const QString LoadScript = "Open and Run Script File...";
     const QString LoadScriptURL = "Open and Run Script from URL...";
     const QString LodTools = "LOD Tools";
@@ -138,9 +142,8 @@ namespace MenuOption {
     const QString OpenVrThreadedSubmit = "OpenVR Threaded Submit"; 
     const QString OutputMenu = "Display";
     const QString Overlays = "Show Overlays";
-    const QString PackageModel = "Package Model as .fst...";
+    const QString PackageModel = "Package Avatar as .fst...";
     const QString Pair = "Pair";
-    const QString PhysicsShowHulls = "Draw Collision Shapes";
     const QString PhysicsShowOwned = "Highlight Simulation Ownership";
     const QString VerboseLogging = "Verbose Logging";
     const QString PhysicsShowBulletWireframe = "Show Bullet Collision";
@@ -183,6 +186,7 @@ namespace MenuOption {
     const QString RunClientScriptTests = "Run Client Script Tests";
     const QString RunTimingTests = "Run Timing Tests";
     const QString ScriptedMotorControl = "Enable Scripted Motor Control";
+    const QString ShowTrackedObjects = "Show Tracked Objects";
     const QString SendWrongDSConnectVersion = "Send wrong DS connect version";
     const QString SendWrongProtocolVersion = "Send wrong protocol version";
     const QString SetHomeLocation = "Set Home Location";
@@ -196,12 +200,15 @@ namespace MenuOption {
     const QString SimulateEyeTracking = "Simulate";
     const QString SMIEyeTracking = "SMI Eye Tracking";
     const QString SparseTextureManagement = "Enable Sparse Texture Management";
+    const QString StartUpLocation = "Start-Up Location";
     const QString Stats = "Show Statistics";
+    const QString AnimStats = "Show Animation Stats";
     const QString StopAllScripts = "Stop All Scripts";
     const QString SuppressShortTimings = "Suppress Timings Less than 10ms";
     const QString ThirdPerson = "Third Person";
     const QString ThreePointCalibration = "3 Point Calibration";
     const QString ThrottleFPSIfNotFocus = "Throttle FPS If Not Focus"; // FIXME - this value duplicated in Basic2DWindowOpenGLDisplayPlugin.cpp
+    const QString ToggleHipsFollowing = "Toggle Hips Following";
     const QString ToolWindow = "Tool Window";
     const QString TransmitterDrive = "Transmitter Drive";
     const QString TurnWithHead = "Turn using Head";
@@ -220,6 +227,8 @@ namespace MenuOption {
     const QString NotificationSounds = "play_notification_sounds";
     const QString NotificationSoundsSnapshot = "play_notification_sounds_snapshot";
     const QString NotificationSoundsTablet = "play_notification_sounds_tablet";
+    const QString ForceCoarsePicking = "Force Coarse Picking";
+    const QString ComputeBlendshapes = "Compute Blendshapes";
 }
 
 #endif // hifi_Menu_h

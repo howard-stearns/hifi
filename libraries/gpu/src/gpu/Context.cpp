@@ -14,6 +14,7 @@
 
 #include "Frame.h"
 #include "GPULogging.h"
+#include <shaders/Shaders.h>
 
 using namespace gpu;
 
@@ -34,7 +35,6 @@ void ContextStats::evalDelta(const ContextStats& begin, const ContextStats& end)
 
 
 Context::CreateBackend Context::_createBackendCallback = nullptr;
-Context::MakeProgram Context::_makeProgramCallback = nullptr;
 std::once_flag Context::_initialized;
 
 Context::Context() {
@@ -47,10 +47,8 @@ Context::Context(const Context& context) {
 }
 
 Context::~Context() {
-    for (auto batch : _batchPool) {
-        delete batch;
-    }
-    _batchPool.clear();
+    clearBatches();
+    _syncedPrograms.clear();
 }
 
 void Context::shutdown() {
@@ -85,6 +83,7 @@ void Context::appendFrameBatch(const BatchPointer& batch) {
 }
 
 FramePointer Context::endFrame() {
+    PROFILE_RANGE(render_gpu, __FUNCTION__);
     assert(_frameActive);
     auto result = _currentFrame;
     _currentFrame.reset();
@@ -95,6 +94,12 @@ FramePointer Context::endFrame() {
     return result;
 }
 
+void Context::executeBatch(const char* name, std::function<void(Batch&)> lambda) const {
+    auto batch = acquireBatch(name);
+    lambda(*batch);
+    executeBatch(*batch);
+}
+
 void Context::executeBatch(Batch& batch) const {
     PROFILE_RANGE(render_gpu, __FUNCTION__);
     batch.flush();
@@ -102,10 +107,12 @@ void Context::executeBatch(Batch& batch) const {
 }
 
 void Context::recycle() const {
+    PROFILE_RANGE(render_gpu, __FUNCTION__);
     _backend->recycle();
 }
 
 void Context::consumeFrameUpdates(const FramePointer& frame) const {
+    PROFILE_RANGE(render_gpu, __FUNCTION__);
     frame->preRender();
 }
 
@@ -113,44 +120,29 @@ void Context::executeFrame(const FramePointer& frame) const {
     PROFILE_RANGE(render_gpu, __FUNCTION__);
 
     // Grab the stats at the around the frame and delta to have a consistent sampling
-    ContextStats beginStats;
+    static ContextStats beginStats;
     getStats(beginStats);
 
     // FIXME? probably not necessary, but safe
     consumeFrameUpdates(frame);
     _backend->setStereoState(frame->stereoState);
-    {
-        Batch beginBatch("Context::executeFrame::begin");
-        _frameRangeTimer->begin(beginBatch);
-        _backend->render(beginBatch);
 
-        // Execute the frame rendering commands
-        for (auto& batch : frame->batches) {
-            _backend->render(*batch);
-        }
-
-        Batch endBatch("Context::executeFrame::end");
-        _frameRangeTimer->end(endBatch);
-        _backend->render(endBatch);
+    executeBatch("Context::executeFrame::begin", [&](Batch& batch){
+        batch.pushProfileRange("Frame");
+        _frameRangeTimer->begin(batch);
+    });
+    // Execute the frame rendering commands
+    for (auto& batch : frame->batches) {
+        _backend->render(*batch);
     }
+    executeBatch("Context::executeFrame::end", [&](Batch& batch){
+        batch.popProfileRange();
+        _frameRangeTimer->end(batch);
+    });
 
-    ContextStats endStats;
+    static ContextStats endStats;
     getStats(endStats);
     _frameStats.evalDelta(beginStats, endStats);
-}
-
-bool Context::makeProgram(Shader& shader, const Shader::BindingSet& bindings, const Shader::CompilationHandler& handler) {
-    PROFILE_RANGE_EX(app, "makeProgram", 0xff4040c0, shader.getID());
-    // If we're running in another DLL context, we need to fetch the program callback out of the application
-    // FIXME find a way to do this without reliance on Qt app properties
-    if (!_makeProgramCallback) {
-        void* rawCallback = qApp->property(hifi::properties::gl::MAKE_PROGRAM_CALLBACK).value<void*>();
-        _makeProgramCallback = reinterpret_cast<Context::MakeProgram>(rawCallback);
-    }
-    if (shader.isProgram() && _makeProgramCallback) {
-        return _makeProgramCallback(shader, bindings, handler);
-    }
-    return false;
 }
 
 void Context::enableStereo(bool enable) {
@@ -343,10 +335,63 @@ Size Context::getTextureResourcePopulatedGPUMemSize() {
     return Backend::textureResourcePopulatedGPUMemSize.getValue();
 }
 
+PipelinePointer Context::createMipGenerationPipeline(const ShaderPointer& ps) {
+    auto vs = gpu::Shader::createVertex(shader::gpu::vertex::DrawViewportQuadTransformTexcoord);
+	static gpu::StatePointer state(new gpu::State());
+
+	gpu::ShaderPointer program = gpu::Shader::createProgram(vs, ps);
+
+	// Good to go add the brand new pipeline
+	return gpu::Pipeline::create(program, state);
+}
+
 Size Context::getTextureResourceIdealGPUMemSize() {
     return Backend::textureResourceIdealGPUMemSize.getValue();
 }
 
+void Context::pushProgramsToSync(const std::vector<uint32_t>& programIDs, std::function<void()> callback, size_t rate) {
+    std::vector<gpu::ShaderPointer> programs;
+    for (auto programID : programIDs) {
+        programs.push_back(gpu::Shader::createProgram(programID));
+    }
+    pushProgramsToSync(programs, callback, rate);
+}
+
+void Context::pushProgramsToSync(const std::vector<gpu::ShaderPointer>& programs, std::function<void()> callback, size_t rate) {
+    Lock lock(_programsToSyncMutex);
+    _programsToSyncQueue.emplace(programs, callback, rate == 0 ? programs.size() : rate);
+}
+
+void Context::processProgramsToSync() {
+    if (!_programsToSyncQueue.empty()) {
+        Lock lock(_programsToSyncMutex);
+        ProgramsToSync programsToSync = _programsToSyncQueue.front();
+        size_t numSynced = 0;
+        while (_nextProgramToSyncIndex < programsToSync.programs.size() && numSynced < programsToSync.rate) {
+            auto nextProgram = programsToSync.programs.at(_nextProgramToSyncIndex);
+            _backend->syncProgram(nextProgram);
+            _syncedPrograms.push_back(nextProgram);
+            _nextProgramToSyncIndex++;
+            numSynced++;
+        }
+
+        if (_nextProgramToSyncIndex == programsToSync.programs.size()) {
+            programsToSync.callback();
+            _nextProgramToSyncIndex = 0;
+            _programsToSyncQueue.pop();
+        }
+    }
+}
+
+std::mutex Context::_batchPoolMutex;
+std::list<Batch*> Context::_batchPool;
+
+void Context::clearBatches() {
+    for (auto batch : _batchPool) {
+        delete batch;
+    }
+    _batchPool.clear();
+}
 
 BatchPointer Context::acquireBatch(const char* name) {
     Batch* rawBatch = nullptr;
@@ -360,8 +405,10 @@ BatchPointer Context::acquireBatch(const char* name) {
     if (!rawBatch) {
         rawBatch = new Batch();
     }
-    rawBatch->setName(name);
-    return BatchPointer(rawBatch, [this](Batch* batch) { releaseBatch(batch); });
+    if (name) {
+        rawBatch->setName(name);
+    }
+    return BatchPointer(rawBatch, [](Batch* batch) { releaseBatch(batch); });
 }
 
 void Context::releaseBatch(Batch* batch) {
@@ -373,7 +420,7 @@ void Context::releaseBatch(Batch* batch) {
 void gpu::doInBatch(const char* name,
                     const std::shared_ptr<gpu::Context>& context,
                     const std::function<void(Batch& batch)>& f) {
-    auto batch = context->acquireBatch(name);
+    auto batch = Context::acquireBatch(name);
     f(*batch);
     context->appendFrameBatch(batch);
 }

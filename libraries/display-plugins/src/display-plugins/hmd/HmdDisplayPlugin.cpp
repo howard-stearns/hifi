@@ -24,8 +24,8 @@
 #include <gl/GLWidget.h>
 #include <shared/NsightHelpers.h>
 #include <gpu/Context.h>
-#include <gpu/StandardShaderLib.h>
 #include <gpu/gl/GLBackend.h>
+#include <shaders/Shaders.h>
 
 #include <TextureCache.h>
 #include <PathUtils.h>
@@ -34,8 +34,6 @@
 #include "../CompositorHelper.h"
 
 #include "DesktopPreviewProvider.h"
-#include "render-utils/hmd_ui_vert.h"
-#include "render-utils/hmd_ui_frag.h"
 
 static const QString MONO_PREVIEW = "Mono Preview";
 static const QString DISABLE_PREVIEW = "Disable Preview";
@@ -409,12 +407,7 @@ void HmdDisplayPlugin::HUDRenderer::build() {
 
 void HmdDisplayPlugin::HUDRenderer::updatePipeline() {
     if (!pipeline) {
-        auto vs = hmd_ui_vert::getShader();
-        auto ps = hmd_ui_frag::getShader();
-        auto program = gpu::Shader::createProgram(vs, ps);
-        gpu::Shader::makeProgram(*program, gpu::Shader::BindingSet());
-        uniformsLocation = program->getUniformBuffers().findLocation("hudBuffer");
-
+        auto program = gpu::Shader::createProgram(shader::render_utils::program::hmd_ui);
         gpu::StatePointer state = gpu::StatePointer(new gpu::State());
         state->setDepthTest(gpu::State::DepthTest(true, true, gpu::LESS_EQUAL));
         state->setBlendFunction(true,
@@ -427,19 +420,26 @@ void HmdDisplayPlugin::HUDRenderer::updatePipeline() {
 
 std::function<void(gpu::Batch&, const gpu::TexturePointer&, bool mirror)> HmdDisplayPlugin::HUDRenderer::render(HmdDisplayPlugin& plugin) {
     updatePipeline();
-    return [this](gpu::Batch& batch, const gpu::TexturePointer& hudTexture, bool mirror) {
-        if (pipeline && hudTexture) {
-            batch.setPipeline(pipeline);
 
-            batch.setInputFormat(format);
-            gpu::BufferView posView(vertices, VERTEX_OFFSET, vertices->getSize(), VERTEX_STRIDE, format->getAttributes().at(gpu::Stream::POSITION)._element);
-            gpu::BufferView uvView(vertices, TEXTURE_OFFSET, vertices->getSize(), VERTEX_STRIDE, format->getAttributes().at(gpu::Stream::TEXCOORD)._element);
+    auto hudPipeline = pipeline;
+    auto hudFormat = format;
+    auto hudVertices = vertices;
+    auto hudIndices = indices;
+    auto hudUniformBuffer = uniformsBuffer;
+    auto hudUniforms = uniforms;
+    auto hudIndexCount = indexCount;
+    return [=](gpu::Batch& batch, const gpu::TexturePointer& hudTexture, bool mirror) {
+        if (hudPipeline && hudTexture) {
+            batch.setPipeline(hudPipeline);
+
+            batch.setInputFormat(hudFormat);
+            gpu::BufferView posView(hudVertices, VERTEX_OFFSET, hudVertices->getSize(), VERTEX_STRIDE, hudFormat->getAttributes().at(gpu::Stream::POSITION)._element);
+            gpu::BufferView uvView(hudVertices, TEXTURE_OFFSET, hudVertices->getSize(), VERTEX_STRIDE, hudFormat->getAttributes().at(gpu::Stream::TEXCOORD)._element);
             batch.setInputBuffer(gpu::Stream::POSITION, posView);
             batch.setInputBuffer(gpu::Stream::TEXCOORD, uvView);
-            batch.setIndexBuffer(gpu::UINT16, indices, 0);
-
-            uniformsBuffer->setSubData(0, uniforms);
-            batch.setUniformBuffer(uniformsLocation, uniformsBuffer);
+            batch.setIndexBuffer(gpu::UINT16, hudIndices, 0);
+            hudUniformBuffer->setSubData(0, hudUniforms);
+            batch.setUniformBuffer(0, hudUniformBuffer);
 
             auto compositorHelper = DependencyManager::get<CompositorHelper>();
             glm::mat4 modelTransform = compositorHelper->getUiTransform();
@@ -449,7 +449,7 @@ std::function<void(gpu::Batch&, const gpu::TexturePointer&, bool mirror)> HmdDis
             batch.setModelTransform(modelTransform);
             batch.setResourceTexture(0, hudTexture);
 
-            batch.drawIndexed(gpu::TRIANGLES, indexCount);
+            batch.drawIndexed(gpu::TRIANGLES, hudIndexCount);
         }
     };
 }

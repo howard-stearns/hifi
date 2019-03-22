@@ -30,10 +30,13 @@
 
 <@include LightClusterGrid.slh@>
 
+<@include render-utils/ShaderConstants.h@>
 
 
-in vec2 _texCoord0;
-out vec4 _fragColor;
+layout(location=RENDER_UTILS_ATTR_TEXCOORD01) in vec4 _texCoord01;
+#define _texCoord0 _texCoord01.xy
+#define _texCoord1 _texCoord01.zw
+layout(location=0) out vec4 _fragColor;
 
 void main(void) {
 
@@ -93,9 +96,8 @@ void main(void) {
         vec3 fragLightDir = fragLightDirLen.xyz;
 
         vec3 color = vec3(0.0);
-        if (evalLightPointEdge(color, light, fragLightDirLen, fragEyeDir)) {
-            _fragColor.rgb += color;
-        }
+        float check = float(evalLightPointEdge(color, light, fragLightDirLen, fragEyeDir));
+        _fragColor.rgb += check * color;
     }
 
     for (int i = cluster.x; i < numLights; i++) {
@@ -127,10 +129,8 @@ void main(void) {
         numLightTouching++;
 
         vec3 color = vec3(0.0);
-
-        if (evalLightSpotEdge(color, light, fragLightDirLen, cosSpotAngle, fragEyeDir)) {
-            _fragColor.rgb += color;
-        }
+        float check = float(evalLightSpotEdge(color, light, fragLightDirLen, cosSpotAngle, fragEyeDir));
+        _fragColor.rgb += check * color;
     }
 
 }

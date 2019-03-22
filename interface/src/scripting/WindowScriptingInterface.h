@@ -31,6 +31,7 @@
  *
  * @hifi-interface
  * @hifi-client-entity
+ * @hifi-avatar
  *
  * @property {number} innerWidth - The width of the drawable area of the Interface window (i.e., without borders or other
  *     chrome), in pixels. <em>Read-only.</em>
@@ -41,6 +42,8 @@
  *     <em>Read-only.</em>
  * @property {number} y - The y display coordinate of the top left corner of the drawable area of the Interface window. 
  *     <em>Read-only.</em>
+ * @property {boolean} interstitialModeEnabled=true - <code>true</code> if the interstitial graphics are displayed when the 
+ *     domain is loading, otherwise <code>false</code>.
  */
 
 class WindowScriptingInterface : public QObject, public Dependency {
@@ -49,6 +52,7 @@ class WindowScriptingInterface : public QObject, public Dependency {
     Q_PROPERTY(int innerHeight READ getInnerHeight)
     Q_PROPERTY(int x READ getX)
     Q_PROPERTY(int y READ getY)
+    Q_PROPERTY(bool interstitialModeEnabled READ getInterstitialModeEnabled WRITE setInterstitialModeEnabled)
 
 public:
     WindowScriptingInterface();
@@ -79,13 +83,6 @@ public slots:
      * @function Window.raise
      */
     void raise();
-
-    /**jsdoc
-     * Raise the Interface window if it is minimized. If raised, the window gains focus.
-     * @function Window.raiseMainWindow
-     * @deprecated Use {@link Window.raise|raise} instead.
-     */
-    void raiseMainWindow();
 
     /**jsdoc
      * Display a dialog with the specified message and an "OK" button. The dialog is non-modal; the script continues without
@@ -318,8 +315,16 @@ public slots:
      * {@link Window.stillSnapshotTaken|stillSnapshotTaken} is emitted; when a still image plus moving images are captured, 
      * {@link Window.processingGifStarted|processingGifStarted} and {@link Window.processingGifCompleted|processingGifCompleted}
      * are emitted. The path to store the snapshots and the length of the animated GIF to capture are specified in Settings >
-     * NOTE:  to provide a non-default value - all previous parameters must be provided.
      * General > Snapshots.
+     *
+     * If user has supplied a specific filename for the snapshot:
+     *     If the user's requested filename has a suffix that's contained within SUPPORTED_IMAGE_FORMATS,
+     *         DON'T append ".jpg" to the filename. QT will save the image in the format associated with the
+     *         filename's suffix.
+     *         If you want lossless Snapshots, supply a `.png` filename. Otherwise, use `.jpeg` or `.jpg`.
+     *     Otherwise, ".jpg" is appended to the user's requested filename so that the image is saved in JPG format.
+     * If the user hasn't supplied a specific filename for the snapshot:
+     *     Save the snapshot in JPG format according to FILENAME_PATH_FORMAT
      * @function Window.takeSnapshot
      * @param {boolean} [notify=true] - This value is passed on through the {@link Window.stillSnapshotTaken|stillSnapshotTaken}
      *     signal.
@@ -328,7 +333,7 @@ public slots:
      * @param {number} [aspectRatio=0] - The width/height ratio of the snapshot required. If the value is <code>0</code> the
      *     full resolution is used (window dimensions in desktop mode; HMD display dimensions in HMD mode), otherwise one of the
      *     dimensions is adjusted in order to match the aspect ratio.
-     * @param {string} [filename=""] - If this parameter is not given, the image will be saved as 'hifi-snap-by-<user name>-YYYY-MM-DD_HH-MM-SS'.
+     * @param {string} [filename=""] - If this parameter is not given, the image will be saved as "hifi-snap-by-&lt;user name&gt-YYYY-MM-DD_HH-MM-SS".
      *     If this parameter is <code>""</code> then the image will be saved as ".jpg".
      *     Otherwise, the image will be saved to this filename, with an appended ".jpg".
      *
@@ -360,29 +365,29 @@ public slots:
 
     /**jsdoc
      * Takes a still snapshot of the current view from the secondary camera that can be set up through the {@link Render} API.
-     * NOTE:  to provide a non-default value - all previous parameters must be provided.
      * @function Window.takeSecondaryCameraSnapshot
-     * @param {string} [filename=""] - If this parameter is not given, the image will be saved as 'hifi-snap-by-<user name>-YYYY-MM-DD_HH-MM-SS'.
+     * @param {boolean} [notify=true] - This value is passed on through the {@link Window.stillSnapshotTaken|stillSnapshotTaken}
+     *     signal.
+     * @param {string} [filename=""] - If this parameter is not given, the image will be saved as "hifi-snap-by-&lt;user name&gt;-YYYY-MM-DD_HH-MM-SS".
      *     If this parameter is <code>""</code> then the image will be saved as ".jpg".
      *     Otherwise, the image will be saved to this filename, with an appended ".jpg".
-     *
-     * var filename = QString();
      */
-    void takeSecondaryCameraSnapshot(const QString& filename = QString());
+    void takeSecondaryCameraSnapshot(const bool& notify = true, const QString& filename = QString());
 
     /**jsdoc
-    * Takes a 360 snapshot given a position of the secondary camera (which does not need to have been previously set up).
-    * @function Window.takeSecondaryCameraSnapshot
-    * @param {vec3} [cameraPosition] - The (x, y, z) position of the camera for the 360 snapshot
-    * @param {boolean} [cubemapOutputFormat=false] - If <code>true</code> then the snapshot is saved as a cube map image, 
-    *     otherwise is saved as an equirectangular image.
-    * @param {string} [filename=""] - If this parameter is not given, the image will be saved as 'hifi-snap-by-<user name>-YYYY-MM-DD_HH-MM-SS'.
-    *     If this parameter is <code>""</code> then the image will be saved as ".jpg".
-    *     Otherwise, the image will be saved to this filename, with an appended ".jpg".
-    *
-    * var filename = QString();
-    */
-    void takeSecondaryCamera360Snapshot(const glm::vec3& cameraPosition, const bool& cubemapOutputFormat = false, const QString& filename = QString());
+     * Takes a 360&deg; snapshot at a given position for the secondary camera. The secondary camera does not need to have been 
+     *     set up.
+     * @function Window.takeSecondaryCamera360Snapshot
+     * @param {Vec3} cameraPosition - The position of the camera for the snapshot.
+     * @param {boolean} [cubemapOutputFormat=false] - If <code>true</code> then the snapshot is saved as a cube map image, 
+     *     otherwise is saved as an equirectangular image.
+     * @param {boolean} [notify=true] - This value is passed on through the {@link Window.stillSnapshotTaken|stillSnapshotTaken}
+     *     signal.
+     * @param {string} [filename=""] - If this parameter is not supplied, the image will be saved as "hifi-snap-by-&lt;user name&gt;-YYYY-MM-DD_HH-MM-SS".
+     *     If this parameter is <code>""</code> then the image will be saved as ".jpg".
+     *     Otherwise, the image will be saved to this filename, with an appended ".jpg".
+     */
+    void takeSecondaryCamera360Snapshot(const glm::vec3& cameraPosition, const bool& cubemapOutputFormat = false, const bool& notify = true, const QString& filename = QString());
 
     /**jsdoc
      * Emit a {@link Window.connectionAdded|connectionAdded} or a {@link Window.connectionError|connectionError} signal that
@@ -491,6 +496,13 @@ public slots:
     glm::vec2 getDeviceSize() const;
 
     /**jsdoc
+     * Gets the last domain connection error when a connection is refused.
+     * @function Window.getLastDomainConnectionError
+     * @returns {Window.ConnectionRefusedReason} Integer number that enumerates the last domain connection refused.
+     */
+    int getLastDomainConnectionError() const;
+
+    /**jsdoc
      * Open a non-modal message box that can have a variety of button combinations. See also, 
      * {@link Window.updateMessageBox|updateMessageBox} and {@link Window.closeMessageBox|closeMessageBox}.
      * @function Window.openMessageBox
@@ -560,6 +572,8 @@ public slots:
      */
     void closeMessageBox(int id);
 
+    float domainLoadingProgress();
+
 private slots:
     void onWindowGeometryChanged(const QRect& geometry);
     void onMessageBoxSelected(int button);
@@ -601,6 +615,23 @@ signals:
     void domainConnectionRefused(const QString& reasonMessage, int reasonCode, const QString& extraInfo);
 
     /**jsdoc
+     * Triggered when you try to visit a domain but are redirected into the error state.
+     * @function Window.redirectErrorStateChanged
+     * @param {boolean} isInErrorState - If <code>true</code>, the user has been redirected to the error URL.
+     * @returns {Signal}
+     */
+    void redirectErrorStateChanged(bool isInErrorState);
+
+    /**jsdoc
+     * Triggered when the interstitial mode changes.
+     * @function Window.interstitialModeChanged
+     * @param {bool} interstitialMode - The new interstitial mode value. If <code>true</code>, the interstitial graphics are 
+     * displayed when the domain is loading.
+     * @returns {Signal}
+     */
+    void interstitialModeChanged(bool interstitialMode);
+
+    /**jsdoc
      * Triggered when a still snapshot has been taken by calling {@link Window.takeSnapshot|takeSnapshot} with 
      *     <code>includeAnimated = false</code> or {@link Window.takeSecondaryCameraSnapshot|takeSecondaryCameraSnapshot}.
      * @function Window.stillSnapshotTaken
@@ -612,7 +643,8 @@ signals:
     void stillSnapshotTaken(const QString& pathStillSnapshot, bool notify);
 
     /**jsdoc
-    * Triggered when a still equirectangular snapshot has been taken by calling {@link Window.takeSecondaryCamera360Snapshot|takeSecondaryCamera360Snapshot}
+    * Triggered when a still 360&deg; snapshot has been taken by calling 
+    *     {@link Window.takeSecondaryCamera360Snapshot|takeSecondaryCamera360Snapshot}.
     * @function Window.snapshot360Taken
     * @param {string} pathStillSnapshot - The path and name of the snapshot image file.
     * @param {boolean} notify - The value of the <code>notify</code> parameter that {@link Window.takeSecondaryCamera360Snapshot|takeSecondaryCamera360Snapshot}
@@ -746,6 +778,9 @@ private:
 
     QString getPreviousBrowseAssetLocation() const;
     void setPreviousBrowseAssetLocation(const QString& location);
+
+    bool getInterstitialModeEnabled() const;
+    void setInterstitialModeEnabled(bool enableInterstitialMode);
 
     void ensureReticleVisible() const;
 

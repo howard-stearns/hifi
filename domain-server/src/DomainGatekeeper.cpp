@@ -16,6 +16,8 @@
 #include <openssl/x509.h>
 #include <random>
 
+#include <QDataStream>
+
 #include <AccountManager.h>
 #include <Assignment.h>
 
@@ -262,7 +264,8 @@ void DomainGatekeeper::updateNodePermissions() {
     QList<SharedNodePointer> nodesToKill;
 
     auto limitedNodeList = DependencyManager::get<LimitedNodeList>();
-    limitedNodeList->eachNode([this, limitedNodeList, &nodesToKill](const SharedNodePointer& node){
+    QWeakPointer<LimitedNodeList> limitedNodeListWeak = limitedNodeList;
+    limitedNodeList->eachNode([this, limitedNodeListWeak, &nodesToKill](const SharedNodePointer& node){
         // the id and the username in NodePermissions will often be the same, but id is set before
         // authentication and verifiedUsername is only set once they user's key has been confirmed.
         QString verifiedUsername = node->getPermissions().getVerifiedUserName();
@@ -294,7 +297,8 @@ void DomainGatekeeper::updateNodePermissions() {
                 machineFingerprint = nodeData->getMachineFingerprint();
 
                 auto sendingAddress = nodeData->getSendingSockAddr().getAddress();
-                isLocalUser = (sendingAddress == limitedNodeList->getLocalSockAddr().getAddress() ||
+                auto nodeList = limitedNodeListWeak.lock();
+                isLocalUser = ((nodeList && sendingAddress == nodeList->getLocalSockAddr().getAddress()) ||
                                sendingAddress == QHostAddress::LocalHost);
             }
 
@@ -410,7 +414,7 @@ SharedNodePointer DomainGatekeeper::processAgentConnectRequest(const NodeConnect
         } else if (verifyUserSignature(username, usernameSignature, nodeConnection.senderSockAddr)) {
             // they sent us a username and the signature verifies it
             getGroupMemberships(username);
-            verifiedUsername = username;
+            verifiedUsername = username.toLower();
         } else {
             // they sent us a username, but it didn't check out
             requestUserPublicKey(username);
@@ -456,22 +460,18 @@ SharedNodePointer DomainGatekeeper::processAgentConnectRequest(const NodeConnect
 
     // in case this is a node that's failing to connect
     // double check we don't have the same node whose sockets match exactly already in the list
-    limitedNodeList->eachNodeBreakable([&](const SharedNodePointer& node){
+    limitedNodeList->eachNodeBreakable([nodeConnection, username, &existingNodeID](const SharedNodePointer& node){
 
         if (node->getPublicSocket() == nodeConnection.publicSockAddr && node->getLocalSocket() == nodeConnection.localSockAddr) {
-            // we have a node that already has these exact sockets - this can occur if a node
-            // is failing to connect to the domain
-
-            // we'll re-use the existing node ID
-            // as long as the user hasn't changed their username (by logging in or logging out)
-            auto existingNodeData = static_cast<DomainServerNodeData*>(node->getLinkedData());
-
-            if (existingNodeData->getUsername() == username) {
-                qDebug() << "Deleting existing connection from same sockaddr: " << node->getUUID();
-                existingNodeID = node->getUUID();
-                return false;
-            }
+            // we have a node that already has these exact sockets
+            // this can occur if a node is failing to connect to the domain
+            
+            // remove the old node before adding the new node
+            qDebug() << "Deleting existing connection from same sockaddr: " << node->getUUID();
+            existingNodeID = node->getUUID();
+            return false;
         }
+
         return true;
     });
 
@@ -658,9 +658,8 @@ void DomainGatekeeper::requestUserPublicKey(const QString& username, bool isOpti
 
     // even if we have a public key for them right now, request a new one in case it has just changed
     JSONCallbackParameters callbackParams;
-    callbackParams.jsonCallbackReceiver = this;
+    callbackParams.callbackReceiver = this;
     callbackParams.jsonCallbackMethod = "publicKeyJSONCallback";
-    callbackParams.errorCallbackReceiver = this;
     callbackParams.errorCallbackMethod = "publicKeyJSONErrorCallback";
 
 
@@ -673,19 +672,19 @@ void DomainGatekeeper::requestUserPublicKey(const QString& username, bool isOpti
                                               QNetworkAccessManager::GetOperation, callbackParams);
 }
 
-QString extractUsernameFromPublicKeyRequest(QNetworkReply& requestReply) {
+QString extractUsernameFromPublicKeyRequest(QNetworkReply* requestReply) {
     // extract the username from the request url
     QString username;
     const QString PUBLIC_KEY_URL_REGEX_STRING = "api\\/v1\\/users\\/([A-Za-z0-9_\\.]+)\\/public_key";
     QRegExp usernameRegex(PUBLIC_KEY_URL_REGEX_STRING);
-    if (usernameRegex.indexIn(requestReply.url().toString()) != -1) {
+    if (usernameRegex.indexIn(requestReply->url().toString()) != -1) {
         username = usernameRegex.cap(1);
     }
     return username.toLower();
 }
 
-void DomainGatekeeper::publicKeyJSONCallback(QNetworkReply& requestReply) {
-    QJsonObject jsonObject = QJsonDocument::fromJson(requestReply.readAll()).object();
+void DomainGatekeeper::publicKeyJSONCallback(QNetworkReply* requestReply) {
+    QJsonObject jsonObject = QJsonDocument::fromJson(requestReply->readAll()).object();
     QString username = extractUsernameFromPublicKeyRequest(requestReply);
 
     bool isOptimisticKey = _inFlightPublicKeyRequests.take(username);
@@ -705,8 +704,8 @@ void DomainGatekeeper::publicKeyJSONCallback(QNetworkReply& requestReply) {
     }
 }
 
-void DomainGatekeeper::publicKeyJSONErrorCallback(QNetworkReply& requestReply) {
-    qDebug() << "publicKey api call failed:" << requestReply.error();
+void DomainGatekeeper::publicKeyJSONErrorCallback(QNetworkReply* requestReply) {
+    qDebug() << "publicKey api call failed:" << requestReply->error();
     QString username = extractUsernameFromPublicKeyRequest(requestReply);
     _inFlightPublicKeyRequests.remove(username);
 }
@@ -891,9 +890,8 @@ void DomainGatekeeper::getGroupMemberships(const QString& username) {
 
 
     JSONCallbackParameters callbackParams;
-    callbackParams.jsonCallbackReceiver = this;
+    callbackParams.callbackReceiver = this;
     callbackParams.jsonCallbackMethod = "getIsGroupMemberJSONCallback";
-    callbackParams.errorCallbackReceiver = this;
     callbackParams.errorCallbackMethod = "getIsGroupMemberErrorCallback";
 
     const QString GET_IS_GROUP_MEMBER_PATH = "api/v1/groups/members/%2";
@@ -904,18 +902,18 @@ void DomainGatekeeper::getGroupMemberships(const QString& username) {
 
 }
 
-QString extractUsernameFromGroupMembershipsReply(QNetworkReply& requestReply) {
+QString extractUsernameFromGroupMembershipsReply(QNetworkReply* requestReply) {
     // extract the username from the request url
     QString username;
     const QString GROUP_MEMBERSHIPS_URL_REGEX_STRING = "api\\/v1\\/groups\\/members\\/([A-Za-z0-9_\\.]+)";
     QRegExp usernameRegex(GROUP_MEMBERSHIPS_URL_REGEX_STRING);
-    if (usernameRegex.indexIn(requestReply.url().toString()) != -1) {
+    if (usernameRegex.indexIn(requestReply->url().toString()) != -1) {
         username = usernameRegex.cap(1);
     }
     return username.toLower();
 }
 
-void DomainGatekeeper::getIsGroupMemberJSONCallback(QNetworkReply& requestReply) {
+void DomainGatekeeper::getIsGroupMemberJSONCallback(QNetworkReply* requestReply) {
     // {
     //     "data":{
     //         "username":"sethalves",
@@ -932,7 +930,7 @@ void DomainGatekeeper::getIsGroupMemberJSONCallback(QNetworkReply& requestReply)
     //     "status":"success"
     // }
 
-    QJsonObject jsonObject = QJsonDocument::fromJson(requestReply.readAll()).object();
+    QJsonObject jsonObject = QJsonDocument::fromJson(requestReply->readAll()).object();
     if (jsonObject["status"].toString() == "success") {
         QJsonObject data = jsonObject["data"].toObject();
         QJsonObject groups = data["groups"].toObject();
@@ -951,16 +949,15 @@ void DomainGatekeeper::getIsGroupMemberJSONCallback(QNetworkReply& requestReply)
     _inFlightGroupMembershipsRequests.remove(extractUsernameFromGroupMembershipsReply(requestReply));
 }
 
-void DomainGatekeeper::getIsGroupMemberErrorCallback(QNetworkReply& requestReply) {
-    qDebug() << "getIsGroupMember api call failed:" << requestReply.error();
+void DomainGatekeeper::getIsGroupMemberErrorCallback(QNetworkReply* requestReply) {
+    qDebug() << "getIsGroupMember api call failed:" << requestReply->error();
     _inFlightGroupMembershipsRequests.remove(extractUsernameFromGroupMembershipsReply(requestReply));
 }
 
 void DomainGatekeeper::getDomainOwnerFriendsList() {
     JSONCallbackParameters callbackParams;
-    callbackParams.jsonCallbackReceiver = this;
+    callbackParams.callbackReceiver = this;
     callbackParams.jsonCallbackMethod = "getDomainOwnerFriendsListJSONCallback";
-    callbackParams.errorCallbackReceiver = this;
     callbackParams.errorCallbackMethod = "getDomainOwnerFriendsListErrorCallback";
 
     const QString GET_FRIENDS_LIST_PATH = "api/v1/user/friends";
@@ -972,7 +969,7 @@ void DomainGatekeeper::getDomainOwnerFriendsList() {
     
 }
 
-void DomainGatekeeper::getDomainOwnerFriendsListJSONCallback(QNetworkReply& requestReply) {
+void DomainGatekeeper::getDomainOwnerFriendsListJSONCallback(QNetworkReply* requestReply) {
     // {
     //     status: "success",
     //     data: {
@@ -989,20 +986,20 @@ void DomainGatekeeper::getDomainOwnerFriendsListJSONCallback(QNetworkReply& requ
     //         ]
     //     }
     // }
-    QJsonObject jsonObject = QJsonDocument::fromJson(requestReply.readAll()).object();
+    QJsonObject jsonObject = QJsonDocument::fromJson(requestReply->readAll()).object();
     if (jsonObject["status"].toString() == "success") {
         _domainOwnerFriends.clear();
         QJsonArray friends = jsonObject["data"].toObject()["friends"].toArray();
         for (int i = 0; i < friends.size(); i++) {
-            _domainOwnerFriends += friends.at(i).toString();
+            _domainOwnerFriends += friends.at(i).toString().toLower();
         }
     } else {
         qDebug() << "getDomainOwnerFriendsList api call returned:" << QJsonDocument(jsonObject).toJson(QJsonDocument::Compact);
     }
 }
 
-void DomainGatekeeper::getDomainOwnerFriendsListErrorCallback(QNetworkReply& requestReply) {
-    qDebug() << "getDomainOwnerFriendsList api call failed:" << requestReply.error();
+void DomainGatekeeper::getDomainOwnerFriendsListErrorCallback(QNetworkReply* requestReply) {
+    qDebug() << "getDomainOwnerFriendsList api call failed:" << requestReply->error();
 }
 
 void DomainGatekeeper::refreshGroupsCache() {
@@ -1010,7 +1007,7 @@ void DomainGatekeeper::refreshGroupsCache() {
     getDomainOwnerFriendsList();
 
     auto nodeList = DependencyManager::get<LimitedNodeList>();
-    nodeList->eachNode([&](const SharedNodePointer& node) {
+    nodeList->eachNode([this](const SharedNodePointer& node) {
         if (!node->getPermissions().isAssignment) {
             // this node is an agent
             const QString& verifiedUserName = node->getPermissions().getVerifiedUserName();

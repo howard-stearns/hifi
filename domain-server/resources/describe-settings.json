@@ -46,6 +46,14 @@
           "default": "40102",
           "type": "int",
           "advanced": true
+        },
+        {
+          "name": "enable_packet_verification",
+          "label": "Enable Packet Verification",
+          "help": "Enable secure checksums on communication that uses the High Fidelity protocol. Increases security with possibly a small performance penalty.",
+          "default": true,
+          "type": "checkbox",
+          "advanced":  true
         }
       ]
     },
@@ -1004,6 +1012,24 @@
           "placeholder": "1",
           "default": "1",
           "advanced": true
+        },
+        {
+          "name": "throttle_start",
+          "type": "double",
+          "label": "Throttle Start Target",
+          "help": "Target percentage of frame time to start throttling",
+          "placeholder": "0.9",
+          "default": 0.9,
+          "advanced": true
+        },
+        {
+          "name": "throttle_backoff",
+          "type": "double",
+          "label": "Throttle Backoff Target",
+          "help": "Target percentage of frame time to backoff throttling",
+          "placeholder": "0.44",
+          "default": 0.44,
+          "advanced": true
         }
       ]
     },
@@ -1223,7 +1249,7 @@
           "name": "max_avatar_height",
           "type": "double",
           "label": "Maximum Avatar Height (meters)",
-          "help": "Limits the scale of avatars in your domain. Cannot be greater than 1755.",
+          "help": "Limits the height of avatars in your domain. Cannot be greater than 1755.",
           "placeholder": 5.2,
           "default": 5.2
         },
@@ -1275,6 +1301,14 @@
           "help": "Threads to spin up for avatar mixing (if not automatically set)",
           "placeholder": "1",
           "default": "1",
+          "advanced": true
+        },
+        {
+          "name": "connection_rate",
+          "label": "Connection Rate",
+          "help": "Number of new agents that can connect to the mixer every second",
+          "placeholder": "50",
+          "default": "50",
           "advanced": true
         }
       ]

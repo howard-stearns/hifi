@@ -9,11 +9,12 @@
 import QtQuick 2.7
 import QtQuick.Controls 2.2
 import QtQuick.Layouts 1.3
+import QtQuick.Window 2.2
 import QtGraphicalEffects 1.0
 import Qt.labs.settings 1.0
-import "../../styles-uit"
+import stylesUit 1.0
 import "../../controls"
-import "../../controls-uit" as HifiControls
+import controlsUit 1.0 as HifiControls
 import "../../dialogs"
 import "../../dialogs/preferences"
 import "tabletWindows"
@@ -23,6 +24,8 @@ Item {
     id: controllerSettings
     height: parent.height
     width: parent.width
+
+    property string title: "Controls"
 
     HifiConstants { id: hifi }
 
@@ -69,10 +72,21 @@ Item {
             id: stack
             initialItem: inputConfiguration
             property alias messageVisible: imageMessageBox.visible
-            property alias selectedPlugin: box.currentText
+            property string selectedPlugin: ""
+
+            property bool keyboardEnabled: false
+            property bool keyboardRaised: false
+            property bool punctuationMode: false
+
             Rectangle {
                 id: inputConfiguration
-                anchors.fill: parent
+                anchors {
+                    top: parent.top
+                    left: parent.left
+                    right: parent.right
+                }
+
+                height: 230
 
                 HifiConstants { id: hifi }
 
@@ -168,7 +182,7 @@ Item {
                         text: "show all input devices"
 
                         onClicked: {
-                            inputPlugins();
+                            box.model = inputPlugins();
                             changeSource();
                         }
                     }
@@ -208,25 +222,30 @@ Item {
                     anchors.leftMargin: 10
                     anchors.topMargin: 30
                 }
+            }
+
+            Rectangle {
+                id: loaderRectangle
+                z: -1
+                color: hifi.colors.baseGray
+                width: parent.width
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: inputConfiguration.bottom
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: keyboard.height
 
                 Loader {
                     id: loader
                     asynchronous: false
-
-                    width: inputConfiguration.width
-                    anchors.left: inputConfiguration.left
-                    anchors.right: inputConfiguration.right
-                    anchors.top: configurationHeader.bottom
-                    anchors.topMargin: 10
-                    anchors.bottom: inputConfiguration.bottom
-
-                    source: InputConfiguration.configurationLayout(box.currentText);
+                    anchors.fill: parent
+                    source: InputConfiguration.configurationLayout(box.textAt(box.currentIndex));
                     onLoaded: {
                         if (loader.item.hasOwnProperty("pluginName")) {
-                    if (box.currentText === "HTC Vive") {
+                            if (box.textAt(box.currentIndex) === "HTC Vive") {
                                 loader.item.pluginName = "OpenVR";
                             } else {
-                                loader.item.pluginName = box.currentText;
+                                loader.item.pluginName = box.textAt(box.currentIndex);
                             }
                         }
 
@@ -237,6 +256,29 @@ Item {
                 }
             }
 
+            HifiControls.Keyboard {
+                id: keyboard
+                raised: parent.keyboardEnabled && parent.keyboardRaised
+                onRaisedChanged: {
+                    if (raised) {
+                        // delayed execution to allow loader and its content to adjust size
+                        Qt.callLater(function() {
+                            loader.item.bringToView(Window.activeFocusItem);
+                        })
+                    }
+                }
+
+                numeric: parent.punctuationMode
+                anchors {
+                    bottom: parent.bottom
+                    left: parent.left
+                    right: parent.right
+                }
+
+                Component.onCompleted: {
+                    parent.keyboardEnabled = HMD.active;
+                }
+            }
 
             function inputPlugins() {
                 if (checkBox.checked) {
@@ -252,11 +294,12 @@ Item {
 
             function changeSource() {
                 loader.source = "";
+                var selectedDevice = box.textAt(box.currentIndex);
                 var source = "";
-                if (box.currentText == "Vive") {
+                if (selectedDevice == "HTC Vive") {
                     source = InputConfiguration.configurationLayout("OpenVR");
                 } else {
-                    source = InputConfiguration.configurationLayout(box.currentText);
+                    source = InputConfiguration.configurationLayout(selectedDevice);
                 }
 
                 loader.source = source;
@@ -265,6 +308,8 @@ Item {
                 } else {
                     box.label = "";
                 }
+
+                stack.selectedPlugin = selectedDevice;
             }
 
             Timer {
@@ -288,6 +333,12 @@ Item {
             id: controllerPrefereneces
             objectName: "TabletControllerPreferences"
             showCategories: ["VR Movement", "Game Controller", "Sixense Controllers", "Perception Neuron", "Leap Motion"]
+            categoryProperties: {
+                "VR Movement" : {
+                    "User real-world height (meters)" : { "anchors.right" : "undefined" },
+                    "RESET SENSORS" : { "width" : "180", "anchors.left" : "undefined" }
+                }
+            }
         }
     }
 }

@@ -2,7 +2,7 @@
 <$VERSION_HEADER$>
 //  Generated on <$_SCRIBE_DATE$>
 //
-//  simple_transparent_textured_fade.slf
+//  simple_transparent_textured_fade.frag
 //  fragment shader
 //
 //  Created by Olivier Prat on 06/05/17.
@@ -23,14 +23,18 @@
 
 <@include Fade.slh@>
 
-// the albedo texture
-uniform sampler2D originalTexture;
+<@include render-utils/ShaderConstants.h@>
 
-in vec4 _positionES;
-in vec3 _normalWS;
-in vec4 _color;
-in vec2 _texCoord0;
-in vec4 _positionWS;
+// the albedo texture
+LAYOUT(binding=0) uniform sampler2D originalTexture;
+
+layout(location=RENDER_UTILS_ATTR_POSITION_ES) in vec4 _positionES;
+layout(location=RENDER_UTILS_ATTR_NORMAL_WS) in vec3 _normalWS;
+layout(location=RENDER_UTILS_ATTR_COLOR) in vec4 _color;
+layout(location=RENDER_UTILS_ATTR_TEXCOORD01) in vec4 _texCoord01;
+#define _texCoord0 _texCoord01.xy
+#define _texCoord1 _texCoord01.zw
+layout(location=RENDER_UTILS_ATTR_POSITION_WS) in vec4 _positionWS;
 
 // Declare after all samplers to prevent sampler location mix up with originalTexture
 <$declareFadeFragmentInstanced()$>
@@ -42,14 +46,10 @@ void main(void) {
     <$fetchFadeObjectParamsInstanced(fadeParams)$>
     applyFade(fadeParams, _positionWS.xyz, fadeEmissive);
 
-    vec4 texel = texture(originalTexture, _texCoord0.st);
-    float opacity = _color.a;
-    if (_color.a <= 0.0) {
-        texel = color_sRGBAToLinear(texel);
-        opacity = -_color.a;
-    }
-    opacity *= texel.a;
-    vec3 albedo = _color.rgb * texel.rgb;
+    vec4 texel = texture(originalTexture, _texCoord0);
+    texel = mix(texel, color_sRGBAToLinear(texel), float(_color.a <= 0.0));
+    texel.rgb *= _color.rgb;
+    texel.a *= abs(_color.a);
 
     vec3 fragPosition = _positionES.xyz;
     vec3 fragNormal = normalize(_normalWS);
@@ -62,12 +62,11 @@ void main(void) {
         1.0,
         fragPosition,
         fragNormal,
-        albedo,
+        texel.rgb,
         DEFAULT_FRESNEL,
         0.0f,
         fadeEmissive,
         DEFAULT_ROUGHNESS,
-        opacity),
-        opacity);
-
+        texel.a),
+        texel.a);
 }

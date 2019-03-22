@@ -28,6 +28,7 @@ class QScriptValue;
  *
  * @hifi-interface
  * @hifi-client-entity
+ * @hifi-avatar
  * @hifi-assignment-client
  */
 class RecordingScriptingInterface : public QObject, public Dependency {
@@ -35,8 +36,6 @@ class RecordingScriptingInterface : public QObject, public Dependency {
 
 public:
     RecordingScriptingInterface();
-
-    void setScriptEngine(QSharedPointer<BaseScriptEngine> scriptEngine) { _scriptEngine = scriptEngine; }
 
 public slots:
 
@@ -246,7 +245,6 @@ protected:
     Flag _useSkeletonModel { false };
     recording::ClipPointer _lastClip;
 
-    QSharedPointer<BaseScriptEngine> _scriptEngine;
     QSet<recording::NetworkClipLoaderPointer> _clipLoaders;
 
 private:

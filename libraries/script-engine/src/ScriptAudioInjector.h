@@ -14,8 +14,25 @@
 
 #include <QtCore/QObject>
 
-#include <AudioInjector.h>
+#include <AudioInjectorManager.h>
 
+/**jsdoc
+ * Plays &mdash; "injects" &mdash; the content of an audio file. Used in the {@link Audio} API.
+ *
+ * @class AudioInjector
+ *
+ * @hifi-interface
+ * @hifi-client-entity
+ * @hifi-avatar
+ * @hifi-server-entity
+ * @hifi-assignment-client
+ *
+ * @property {boolean} playing - <code>true</code> if the audio is currently playing, otherwise <code>false</code>. 
+ *     <em>Read-only.</em>
+ * @property {number} loudness - The loudness in the last frame of audio, range <code>0.0</code> &ndash; <code>1.0</code>. 
+ *     <em>Read-only.</em>
+ * @property {AudioInjector.AudioInjectorOptions} options - Configures how the injector plays the audio.
+ */
 class ScriptAudioInjector : public QObject {
     Q_OBJECT
 
@@ -26,20 +43,97 @@ public:
     ScriptAudioInjector(const AudioInjectorPointer& injector);
     ~ScriptAudioInjector();
 public slots:
-    void restart() { _injector->restart(); }
-    void stop() { _injector->stop(); }
 
-    const AudioInjectorOptions& getOptions() const { return _injector->getOptions(); }
-    void setOptions(const AudioInjectorOptions& options) { _injector->setOptions(options); }
+    /**jsdoc
+     * Stop current playback, if any, and start playing from the beginning.
+     * @function AudioInjector.restart
+     */
+    void restart() { DependencyManager::get<AudioInjectorManager>()->restart(_injector); }
 
-    float getLoudness() const { return _injector->getLoudness(); }
-    bool isPlaying() const { return _injector->isPlaying(); }
+    /**jsdoc
+     * Stop audio playback.
+     * @function AudioInjector.stop
+     * @example <caption>Stop playing a sound before it finishes.</caption>
+     * var sound = SoundCache.getSound(Script.resourcesPath() + "sounds/sample.wav");
+     * var injector;
+     * var injectorOptions = {
+     *     position: MyAvatar.position
+     * };
+     * 
+     * Script.setTimeout(function () { // Give the sound time to load.
+     *     injector = Audio.playSound(sound, injectorOptions);
+     * }, 1000);
+     * 
+     * Script.setTimeout(function () {
+     *     injector.stop();
+     * }, 2000);
+     */
+    void stop() { DependencyManager::get<AudioInjectorManager>()->stop(_injector); }
+
+    /**jsdoc
+     * Get the current configuration of the audio injector.
+     * @function AudioInjector.getOptions
+     * @returns {AudioInjector.AudioInjectorOptions} Configuration of how the injector plays the audio.
+     */
+    AudioInjectorOptions getOptions() const { return DependencyManager::get<AudioInjectorManager>()->getOptions(_injector); }
+
+    /**jsdoc
+     * Configure how the injector plays the audio.
+     * @function AudioInjector.setOptions
+     * @param {AudioInjector.AudioInjectorOptions} options - Configuration of how the injector plays the audio.
+     */
+    void setOptions(const AudioInjectorOptions& options) { DependencyManager::get<AudioInjectorManager>()->setOptions(_injector, options); }
+
+    /**jsdoc
+     * Get the loudness of the most recent frame of audio played.
+     * @function AudioInjector.getLoudness
+     * @returns {number} The loudness of the most recent frame of audio played, range <code>0.0</code> &ndash; <code>1.0</code>.
+     */
+    float getLoudness() const { return DependencyManager::get<AudioInjectorManager>()->getLoudness(_injector); }
+
+    /**jsdoc
+     * Get whether or not the audio is currently playing.
+     * @function AudioInjector.isPlaying
+     * @returns {boolean} <code>true</code> if the audio is currently playing, otherwise <code>false</code>.
+     * @example <caption>See if a sound is playing.</caption>
+     * var sound = SoundCache.getSound(Script.resourcesPath() + "sounds/sample.wav");
+     * var injector;
+     * var injectorOptions = {
+     *     position: MyAvatar.position
+     * };
+     *
+     * Script.setTimeout(function () { // Give the sound time to load.
+     *     injector = Audio.playSound(sound, injectorOptions);
+     * }, 1000);
+     *
+     * Script.setTimeout(function () {
+     *     print("Sound is playing: " + injector.isPlaying());
+     * }, 2000);
+     */
+    bool isPlaying() const { return DependencyManager::get<AudioInjectorManager>()->isPlaying(_injector); }
 
 signals:
+
+    /**jsdoc
+     * Triggered when the audio has finished playing.
+     * @function AudioInjector.finished
+     * @returns {Signal}
+     * @example <caption>Report when a sound has finished playing.</caption>
+     * var sound = SoundCache.getSound(Script.resourcesPath() + "sounds/sample.wav");
+     * var injector;
+     * var injectorOptions = {
+     *     position: MyAvatar.position
+     * };
+     * 
+     * Script.setTimeout(function () { // Give the sound time to load.
+     *     injector = Audio.playSound(sound, injectorOptions);
+     *     injector.finished.connect(function () {
+     *         print("Finished playing sound");
+     *     });
+     * }, 1000);
+     */
     void finished();
 
-protected slots:
-    void stopInjectorImmediately();
 private:
     AudioInjectorPointer _injector;
 

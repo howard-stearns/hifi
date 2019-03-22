@@ -28,12 +28,13 @@ constexpr Version INITIAL_VERSION = 0;
 class RawOctreeData {
 public:
     QUuid id { QUuid() };
+    Version dataVersion { -1 };
     Version version { -1 };
 
     virtual PacketType dataPacketType() const;
 
-    virtual void readSubclassData(const QJsonObject& root) { }
-    virtual void writeSubclassData(QJsonObject& root) const { }
+    virtual void readSubclassData(const QVariantMap& root) { }
+    virtual void writeSubclassData(QByteArray& root) const { }
 
     void resetIdAndVersion();
     QByteArray toByteArray();
@@ -41,15 +42,16 @@ public:
 
     bool readOctreeDataInfoFromData(QByteArray data);
     bool readOctreeDataInfoFromFile(QString path);
-    bool readOctreeDataInfoFromJSON(QJsonObject root);
+    bool readOctreeDataInfoFromMap(const QVariantMap& map);
 };
 
 class RawEntityData : public RawOctreeData {
+public:
     PacketType dataPacketType() const override;
-    void readSubclassData(const QJsonObject& root) override;
-    void writeSubclassData(QJsonObject& root) const override;
+    void readSubclassData(const QVariantMap& root) override;
+    void writeSubclassData(QByteArray& root) const override;
 
-    QJsonArray entityData;
+    QVariantList variantEntityData;
 };
 
 }

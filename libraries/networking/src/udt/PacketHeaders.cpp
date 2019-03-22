@@ -27,20 +27,21 @@ PacketVersion versionForPacketType(PacketType packetType) {
         case PacketType::StunResponse:
             return 17;
         case PacketType::DomainList:
-            return static_cast<PacketVersion>(DomainListVersion::GetMachineFingerprintFromUUIDSupport);
+            return static_cast<PacketVersion>(DomainListVersion::AuthenticationOptional);
         case PacketType::EntityAdd:
         case PacketType::EntityClone:
         case PacketType::EntityEdit:
         case PacketType::EntityData:
         case PacketType::EntityPhysics:
-            return static_cast<PacketVersion>(EntityVersion::CollisionMask16Bytes);
+            return static_cast<PacketVersion>(EntityVersion::LAST_PACKET_TYPE);
         case PacketType::EntityQuery:
             return static_cast<PacketVersion>(EntityQueryPacketVersion::ConicalFrustums);
         case PacketType::AvatarIdentity:
         case PacketType::AvatarData:
+            return static_cast<PacketVersion>(AvatarMixerPacketVersion::SendMaxTranslationDimension);
         case PacketType::BulkAvatarData:
         case PacketType::KillAvatar:
-            return static_cast<PacketVersion>(AvatarMixerPacketVersion::FBXReaderNodeReparenting);
+            return static_cast<PacketVersion>(AvatarMixerPacketVersion::SendMaxTranslationDimension);
         case PacketType::MessagesData:
             return static_cast<PacketVersion>(MessageDataVersion::TextOrBinaryData);
         // ICE packets
@@ -92,8 +93,13 @@ PacketVersion versionForPacketType(PacketType packetType) {
             return static_cast<PacketVersion>(PingVersion::IncludeConnectionID);
         case PacketType::AvatarQuery:
             return static_cast<PacketVersion>(AvatarQueryVersion::ConicalFrustums);
+        case PacketType::EntityQueryInitialResultsComplete:
+            return static_cast<PacketVersion>(EntityVersion::ParticleSpin);
+        case PacketType::BulkAvatarTraitsAck:
+        case PacketType::BulkAvatarTraits:
+            return static_cast<PacketVersion>(AvatarMixerPacketVersion::AvatarTraitsAck);
         default:
-            return 21;
+            return 22;
     }
 }
 

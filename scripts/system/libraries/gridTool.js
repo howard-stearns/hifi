@@ -1,6 +1,8 @@
+/* global keyUpEventFromUIWindow */
+
 var GRID_CONTROLS_HTML_URL = Script.resolvePath('../html/gridControls.html');
 
-Grid = function(opts) {
+Grid = function() {
     var that = {};
     var gridColor = { red: 0, green: 0, blue: 0 };
     var gridAlpha = 0.6;
@@ -154,6 +156,12 @@ Grid = function(opts) {
             that.emitUpdate();
         }
     };
+    
+    that.moveToSelection = function() {
+        var newPosition = SelectionManager.worldPosition;
+        newPosition = Vec3.subtract(newPosition, { x: 0, y: SelectionManager.worldDimensions.y * 0.5, z: 0 });
+        that.setPosition(newPosition);
+    };
 
     that.emitUpdate = function() {
         if (that.onUpdate) {
@@ -240,6 +248,8 @@ GridTool = function(opts) {
 
     var horizontalGrid = opts.horizontalGrid;
     var verticalGrid = opts.verticalGrid;
+    var createToolsWindow = opts.createToolsWindow;
+    var shouldUseEditTabletApp = opts.shouldUseEditTabletApp;
     var listeners = [];
 
     var webView = null;
@@ -247,49 +257,53 @@ GridTool = function(opts) {
     webView.setVisible = function(value) { };
 
     horizontalGrid.addListener(function(data) {
-        webView.emitScriptEvent(JSON.stringify(data));
+        var dataString = JSON.stringify(data);
+        webView.emitScriptEvent(dataString);
+        createToolsWindow.emitScriptEvent(dataString);
         if (selectionDisplay) {
             selectionDisplay.updateHandles();
         }
     });
 
-    webView.webEventReceived.connect(function(data) {
+    var webEventReceived = function(data) {
         try {
             data = JSON.parse(data);
         } catch (e) {
-            print("gridTool.js: Error parsing JSON: " + e.name + " data " + data);
             return;
         }
 
-        if (data.type == "init") {
+        if (data.type === "init") {
             horizontalGrid.emitUpdate();
-        } else if (data.type == "update") {
+        } else if (data.type === "update") {
             horizontalGrid.update(data);
             for (var i = 0; i < listeners.length; i++) {
                 listeners[i] && listeners[i](data);
             }
-        } else if (data.type == "action") {
+        } else if (data.type === "action") {
             var action = data.action;
-            if (action == "moveToAvatar") {
+            if (action === "moveToAvatar") {
                 var position = MyAvatar.getJointPosition("LeftFoot");
-                if (position.x == 0 && position.y == 0 && position.z == 0) {
+                if (position.x === 0 && position.y === 0 && position.z === 0) {
                     position = MyAvatar.position;
                 }
                 horizontalGrid.setPosition(position);
-            } else if (action == "moveToSelection") {
-                var newPosition = selectionManager.worldPosition;
-                newPosition = Vec3.subtract(newPosition, { x: 0, y: selectionManager.worldDimensions.y * 0.5, z: 0 });
-                grid.setPosition(newPosition);
+            } else if (action === "moveToSelection") {
+                horizontalGrid.moveToSelection();
             }
+        } else if (data.type === 'keyUpEvent') {
+            keyUpEventFromUIWindow(data.keyUpEvent);
         }
-    });
+    };
+
+    webView.webEventReceived.connect(webEventReceived);
+    createToolsWindow.webEventReceived.addListener(webEventReceived);
 
     that.addListener = function(callback) {
         listeners.push(callback);
     };
 
     that.setVisible = function(visible) {
-        webView.setVisible(visible);
+        webView.setVisible(shouldUseEditTabletApp() && visible);
     };
 
     return that;

@@ -7,6 +7,8 @@
 //
 #pragma once
 
+#ifndef DISABLE_QML
+
 #include <QtCore/QObject>
 #include <QtCore/QThread>
 #include <QtGui/qevent.h>
@@ -51,6 +53,10 @@ private:
 
     uint32_t _fbo{ 0 };
     uint32_t _depthStencil{ 0 };
+
+    bool _initialized { false };
 };
 
 }}}  // namespace hifi::qml::impl
+
+#endif

@@ -61,6 +61,9 @@ Item {
                         text: "Game Rate: " + root.gameLoopRate
                     }
                     StatText {
+                        text: "Physics Object Count: " + root.physicsObjectCount
+                    }
+                    StatText {
                         visible: root.expanded
                         text: root.gameUpdateStats
                     }
@@ -114,7 +117,27 @@ Item {
                     }
                     StatText {
                         visible: root.expanded
+                        text: "Heroes Count/Updated: " + root.heroAvatarCount + "/" + root.updatedHeroAvatarCount
+                    }
+                    StatText {
+                        visible: root.expanded
                         text: "Avatars NOT Updated: " + root.notUpdatedAvatarCount
+                    }
+                    StatText {
+                        visible: root.expanded
+                        text: "Total picks:\n    " +
+                                    root.stylusPicksCount + " styluses\n    " +
+                                    root.rayPicksCount + " rays\n    " +
+                                    root.parabolaPicksCount + " parabolas\n    " +
+                                    root.collisionPicksCount + " colliders"
+                    }
+                    StatText {
+                        visible: root.expanded
+                        text: "Intersection calls: Entities/Avatars/HUD\n    " +
+                                    "Styluses:\t" + root.stylusPicksUpdated.x + "/" + root.stylusPicksUpdated.y + "/" + root.stylusPicksUpdated.z + "\n    " +
+                                    "Rays:\t" + root.rayPicksUpdated.x + "/" + root.rayPicksUpdated.y + "/" + root.rayPicksUpdated.z + "\n    " +
+                                    "Parabolas:\t" + root.parabolaPicksUpdated.x + "/" + root.parabolaPicksUpdated.y + "/" + root.parabolaPicksUpdated.z + "\n    " +
+                                    "Colliders:\t" + root.collisionPicksUpdated.x + "/" + root.collisionPicksUpdated.y + "/" + root.collisionPicksUpdated.z
                     }
                 }
             }
@@ -191,13 +214,13 @@ Item {
                     }
                     StatText {
                         visible: root.expanded;
-                        text: "Audio In Audio: " + root.audioAudioInboundPPS + " pps, " +
-                            "Silent: " + root.audioSilentInboundPPS + " pps";
+                        text: "Audio Mixer Out: " + root.audioMixerOutKbps + " kbps, " +
+                        root.audioMixerOutPps + "pps";
                     }
                     StatText {
                         visible: root.expanded;
-                        text: "Audio Mixer Out: " + root.audioMixerOutKbps + " kbps, " +
-                            root.audioMixerOutPps + "pps";
+                        text: "Audio In Audio: " + root.audioAudioInboundPPS + " pps, " +
+                            "Silent: " + root.audioSilentInboundPPS + " pps";
                     }
                     StatText {
                         visible: root.expanded;
@@ -208,6 +231,10 @@ Item {
                         visible: root.expanded;
                         text: "Audio Codec: " + root.audioCodec + " Noise Gate: " +
                             root.audioNoiseGate;
+                    }
+                    StatText {
+                        visible: root.expanded;
+                        text: "Injectors (Local/NonLocal): " + root.audioInjectors.x + "/" + root.audioInjectors.y;
                     }
                     StatText {
                         visible: root.expanded;
@@ -263,53 +290,76 @@ Item {
                     }
                     StatText {
                         text: "GPU: " + root.gpuFrameTime.toFixed(1) + " ms"
+                    }                    
+                    StatText {
+                        text: "GPU (Per pixel): " + root.gpuFrameTimePerPixel.toFixed(5) + " ns/pp"
+                    }                    
+                    StatText {
+                        text: "GPU frame size: " + root.gpuFrameSize.x + " x " + root.gpuFrameSize.y
+                    }
+                    StatText {
+                        text: "Drawcalls: " + root.drawcalls
                     }
                     StatText {
                         text: "Triangles: " + root.triangles +
                             " / Material Switches: " + root.materialSwitches
                     }
                     StatText {
+                        visible: root.expanded;
                         text: "GPU Free Memory: " + root.gpuFreeMemory + " MB";
                     }
                     StatText {
+                        visible: root.expanded;
                         text: "GPU Textures: ";
                     }
                     StatText {
+                        visible: root.expanded;
                         text: "  Count: " + root.gpuTextures;
                     }
                     StatText {
+                        visible: root.expanded;
                         text: "  Pressure State: " + root.gpuTextureMemoryPressureState;
                     }
                     StatText {
+                        visible: root.expanded;
                         property bool showIdeal: (root.gpuTextureResourceIdealMemory != root.gpuTextureResourceMemory);
                         text: "  Resource Allocated " + (showIdeal ? "(Ideal)" : "") + " / Populated / Pending: ";
                     }
                     StatText {
+                        visible: root.expanded;
                         property bool showIdeal: (root.gpuTextureResourceIdealMemory != root.gpuTextureResourceMemory);
                         text: "       " + root.gpuTextureResourceMemory + (showIdeal ? ("(" +  root.gpuTextureResourceIdealMemory + ")") : "") + " / " + root.gpuTextureResourcePopulatedMemory + " / " + root.texturePendingTransfers + " MB";
                     }
                     StatText {
+                        visible: root.expanded;
                         text: "  Resident Memory: " + root.gpuTextureResidentMemory + " MB";
                     }
                     StatText {
+                        visible: root.expanded;
                         text: "  Framebuffer Memory: " + root.gpuTextureFramebufferMemory + " MB";
                     }
                     StatText {
+                        visible: root.expanded;
                         text: "  External Memory: " + root.gpuTextureExternalMemory + " MB";
                     }
                     StatText {
+                        visible: root.expanded;
                         text: "GPU Buffers: "
                     }
                     StatText {
+                        visible: root.expanded;
                         text: "  Count: " + root.gpuBuffers;
                     }
                     StatText {
+                        visible: root.expanded;
                         text: "  Memory: " + root.gpuBufferMemory + " MB";
                     }
                     StatText {
+                        visible: root.expanded;
                         text: "GL Swapchain Memory: " + root.glContextSwapchainMemory + " MB";
                     }
                     StatText {
+                        visible: root.expanded;
                         text: "QML Texture Memory: " + root.qmlTextureMemory + " MB";
                     }
                     StatText {

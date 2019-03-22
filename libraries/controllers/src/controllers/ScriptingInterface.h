@@ -26,6 +26,7 @@
 #include <QThread>
 #include <QtCore/QObject>
 #include <QtCore/QVariant>
+#include <QMutex>
 
 #include <QtQml/QJSValue>
 #include <QtScript/QScriptValue>
@@ -205,43 +206,6 @@ namespace controller {
          * print("Pose: " + JSON.stringify(pose));
          */
         Q_INVOKABLE Pose getPoseValue(const int& source) const;
-
-        /**jsdoc
-         * Get the value of a button on a particular device.
-         * @function Controller.getButtonValue
-         * @param {StandardButtonChannel} source - The button to get the value of.
-         * @param {number} [device=0] - The ID of the hardware device to get the value from. The default value of 
-         *    <code>0</code> corresponds to <code>Standard</code>.
-         * @returns {number} The current value of the button if the parameters are valid, otherwise <code>0</code>.
-         * @deprecated This function no longer works.
-         */
-         // FIXME: This function causes a JavaScript crash: https://highfidelity.manuscript.com/f/cases/edit/14139
-        Q_INVOKABLE float getButtonValue(StandardButtonChannel source, uint16_t device = 0) const;
-
-        /**jsdoc
-         * Get the value of an axis control on a particular device.
-         * @function Controller.getAxisValue
-         * @variation 0
-         * @param {StandardAxisChannel} source - The axis to get the value of.
-         * @param {number} [device=0] - The ID of the hardware device to get the value from. The default value of 
-         *    <code>0</code> corresponds to <code>Standard</code>.
-         * @returns {number} The current value of the axis if the parameters are valid, otherwise <code>0</code>.
-         * @deprecated This function no longer works.
-         */
-        Q_INVOKABLE float getAxisValue(StandardAxisChannel source, uint16_t device = 0) const;
-
-        /**jsdoc
-         * Get the value of an pose control on a particular device.
-         * @function Controller.getPoseValue
-         * @variation 0
-         * @param {StandardPoseChannel} source - The pose to get the value of.
-         * @param {number} [device=0] - The ID of the hardware device to get the value from. The default value of 
-         *    <code>0</code> corresponds to <code>Standard</code>.
-         * @returns {Pose} The current value of the controller pose output if the parameters are valid, otherwise an invalid 
-         *     pose with <code>Pose.valid == false</code>.
-         * @deprecated This function no longer works.
-         */
-        Q_INVOKABLE Pose getPoseValue(StandardPoseChannel source, uint16_t device = 0) const;
 
         /**jsdoc
          * Triggers a haptic pulse on connected and enabled devices that have the capability.
@@ -468,6 +432,13 @@ namespace controller {
          */
         Q_INVOKABLE QString getInputRecorderSaveDirectory();
 
+        /**jsdoc
+        * Get all the active and enabled (running) input devices
+        * @function Controller.getRunningInputDevices
+        * @returns {string[]} An array of strings with the names
+        */
+        Q_INVOKABLE QStringList getRunningInputDeviceNames();
+
         bool isMouseCaptured() const { return _mouseCaptured; }
         bool isTouchCaptured() const { return _touchCaptured; }
         bool isWheelCaptured() const { return _wheelCaptured; }
@@ -568,6 +539,8 @@ namespace controller {
          */
         virtual void releaseActionEvents() { _actionsCaptured = false; }
 
+        void updateRunningInputDevices(const QString& deviceName, bool isRunning, const QStringList& runningDevices);
+
     signals:
         /**jsdoc
          * Triggered when an action occurs.
@@ -627,6 +600,17 @@ namespace controller {
          */
         void hardwareChanged();
 
+        /**jsdoc
+        * Triggered when a device is enabled/disabled
+        * Enabling/Disabling Leapmotion on settings/controls will trigger this signal.
+        * @function Controller.deviceRunningChanged
+        * @param {string} deviceName - The name of the device that is getting enabled/disabled
+        * @param {boolean} isEnabled - Return if the device is enabled.
+        * @returns {Signal}
+        */
+        void inputDeviceRunningChanged(QString deviceName, bool isRunning);
+
+
     private:
         // Update the exposed variant maps reporting active hardware
         void updateMaps();
@@ -635,10 +619,14 @@ namespace controller {
         QVariantMap _actions;
         QVariantMap _standard;
 
+        QStringList _runningInputDeviceNames;
+
         std::atomic<bool> _mouseCaptured{ false };
         std::atomic<bool> _touchCaptured { false };
         std::atomic<bool> _wheelCaptured { false };
         std::atomic<bool> _actionsCaptured { false };
+
+        QMutex _runningDevicesMutex;
     };
 
 }

@@ -16,7 +16,7 @@
 #include <QtCore/QStack>
 #include <QtGui/QMouseEvent>
 
-#include <AbstractAudioInterface.h>
+#include <AudioInjectorManager.h>
 #include <EntityScriptingInterface.h> // for RayToEntityIntersectionResult
 #include <EntityTree.h>
 #include <PointerEvent.h>
@@ -24,6 +24,7 @@
 #include <TextureCache.h>
 #include <OctreeProcessor.h>
 #include <render/Forward.h>
+#include <workload/Space.h>
 
 class AbstractScriptingServicesInterface;
 class AbstractViewStateInterface;
@@ -38,9 +39,6 @@ namespace render { namespace entities {
     using EntityRendererWeakPointer = std::weak_ptr<EntityRenderer>;
 
 } }
-
-// Allow the use of std::unordered_map with QUuid keys
-namespace std { template<> struct hash<EntityItemID> { size_t operator()(const EntityItemID& id) const; }; }
 
 using EntityRenderer = render::entities::EntityRenderer;
 using EntityRendererPointer = render::entities::EntityRendererPointer;
@@ -75,6 +73,7 @@ public:
     static void setEntityLoadingPriorityFunction(CalculateEntityLoadingPriority fn) { _calculateEntityLoadingPriorityFunc = fn; }
 
     void setMouseRayPickID(unsigned int rayPickID) { _mouseRayPickID = rayPickID; }
+    unsigned int getMouseRayPickID() { return _mouseRayPickID; }
     void setMouseRayPickResultOperator(std::function<RayToEntityIntersectionResult(unsigned int)> getPrevRayPickResultOperator) { _getPrevRayPickResultOperator = getPrevRayPickResultOperator;  }
     void setSetPrecisionPickingOperator(std::function<void(unsigned int, bool)> setPrecisionPickingOperator) { _setPrecisionPickingOperator = setPrecisionPickingOperator; }
 
@@ -88,14 +87,15 @@ public:
     virtual void init() override;
 
     /// clears the tree
+    virtual void clearDomainAndNonOwnedEntities() override;
     virtual void clear() override;
 
     /// reloads the entity scripts, calling unload and preload
     void reloadEntityScripts();
 
     // event handles which may generate entity related events
+    QUuid mousePressEvent(QMouseEvent* event);
     void mouseReleaseEvent(QMouseEvent* event);
-    void mousePressEvent(QMouseEvent* event);
     void mouseDoublePressEvent(QMouseEvent* event);
     void mouseMoveEvent(QMouseEvent* event);
 
@@ -106,7 +106,7 @@ public:
     // For Scene.shouldRenderEntities
     QList<EntityItemID>& getEntitiesLastInScene() { return _entityIDsLastInScene; }
 
-    std::shared_ptr<ZoneEntityItem> myAvatarZone() { return _layeredZones.getZone(); }
+    std::pair<bool, bool> getZoneInteractionProperties();
 
     bool wantsKeyboardFocus(const EntityItemID& id) const;
     QObject* getEventHandler(const EntityItemID& id);
@@ -116,14 +116,25 @@ public:
     EntityItemPointer getEntity(const EntityItemID& id);
     void onEntityChanged(const EntityItemID& id);
 
-    static void setRenderDebugHullsOperator(std::function<bool()> renderDebugHullsOperator) { _renderDebugHullsOperator = renderDebugHullsOperator; }
-    static bool shouldRenderDebugHulls() { return _renderDebugHullsOperator(); }
+    // Access the workload Space
+    workload::SpacePointer getWorkloadSpace() const { return _space; }
+
+    EntityEditPacketSender* getPacketSender();
+
+    static void setAddMaterialToEntityOperator(std::function<bool(const QUuid&, graphics::MaterialLayer, const std::string&)> addMaterialToEntityOperator) { _addMaterialToEntityOperator = addMaterialToEntityOperator; }
+    static void setRemoveMaterialFromEntityOperator(std::function<bool(const QUuid&, graphics::MaterialPointer, const std::string&)> removeMaterialFromEntityOperator) { _removeMaterialFromEntityOperator = removeMaterialFromEntityOperator; }
+    static bool addMaterialToEntity(const QUuid& entityID, graphics::MaterialLayer material, const std::string& parentMaterialName);
+    static bool removeMaterialFromEntity(const QUuid& entityID, graphics::MaterialPointer material, const std::string& parentMaterialName);
+
+    static void setAddMaterialToAvatarOperator(std::function<bool(const QUuid&, graphics::MaterialLayer, const std::string&)> addMaterialToAvatarOperator) { _addMaterialToAvatarOperator = addMaterialToAvatarOperator; }
+    static void setRemoveMaterialFromAvatarOperator(std::function<bool(const QUuid&, graphics::MaterialPointer, const std::string&)> removeMaterialFromAvatarOperator) { _removeMaterialFromAvatarOperator = removeMaterialFromAvatarOperator; }
+    static bool addMaterialToAvatar(const QUuid& avatarID, graphics::MaterialLayer material, const std::string& parentMaterialName);
+    static bool removeMaterialFromAvatar(const QUuid& avatarID, graphics::MaterialPointer material, const std::string& parentMaterialName);
 
 signals:
     void enterEntity(const EntityItemID& entityItemID);
     void leaveEntity(const EntityItemID& entityItemID);
     void collisionWithEntity(const EntityItemID& idA, const EntityItemID& idB, const Collision& collision);
-    void setRenderDebugHulls();
 
 public slots:
     void addingEntity(const EntityItemID& entityID);
@@ -138,6 +149,8 @@ public slots:
     void setPrecisionPicking(bool value) { _setPrecisionPickingOperator(_mouseRayPickID, value); }
     EntityRendererPointer renderableForEntityId(const EntityItemID& id) const;
     render::ItemID renderableIdForEntityId(const EntityItemID& id) const;
+
+    void handleSpaceUpdate(std::pair<int32_t, glm::vec4> proxyUpdate);
 
 protected:
     virtual OctreePointer createTree() override {
@@ -157,6 +170,7 @@ private:
     bool findBestZoneAndMaybeContainingEntities(QVector<EntityItemID>* entitiesContainingAvatar = nullptr);
 
     bool applyLayeredZones();
+    void stopDomainAndNonOwnedEntities();
 
     void checkAndCallPreload(const EntityItemID& entityID, bool reload = false, bool unloadFirst = false);
 
@@ -165,6 +179,7 @@ private:
 
     QScriptValueList createEntityArgs(const EntityItemID& entityID);
     bool checkEnterLeaveEntities();
+    void leaveDomainAndNonOwnedEntities();
     void leaveAllEntities();
     void forceRecheckEntities();
 
@@ -206,42 +221,29 @@ private:
 
     class LayeredZones : public std::set<LayeredZone> {
     public:
-        LayeredZones(EntityTreeRenderer* parent) : _entityTreeRenderer(parent) {}
+        LayeredZones() {};
         LayeredZones(LayeredZones&& other);
 
         // avoid accidental misconstruction
-        LayeredZones() = delete;
         LayeredZones(const LayeredZones&) = delete;
         LayeredZones& operator=(const LayeredZones&) = delete;
         LayeredZones& operator=(LayeredZones&&) = delete;
 
         void clear();
+        void clearNonLocalLayeredZones();
         std::pair<iterator, bool> insert(const LayeredZone& layer);
-
-        void apply();
         void update(std::shared_ptr<ZoneEntityItem> zone);
-
         bool contains(const LayeredZones& other);
 
         std::shared_ptr<ZoneEntityItem> getZone() { return empty() ? nullptr : begin()->zone; }
 
     private:
-        void applyPartial(iterator layer);
-
         std::map<QUuid, iterator> _map;
-        iterator _skyboxLayer{ end() };
-        EntityTreeRenderer* _entityTreeRenderer;
+        iterator _skyboxLayer { end() };
     };
 
     LayeredZones _layeredZones;
-    QString _zoneUserData;
-    NetworkTexturePointer _ambientTexture;
-    NetworkTexturePointer _skyboxTexture;
-    QString _ambientTextureURL;
-    QString _skyboxTextureURL;
     float _avgRenderableUpdateCost { 0.0f };
-    bool _pendingAmbientTexture { false };
-    bool _pendingSkyboxTexture { false };
 
     uint64_t _lastZoneCheck { 0 };
     const uint64_t ZONE_CHECK_INTERVAL = USECS_PER_MSEC * 100; // ~10hz
@@ -260,7 +262,15 @@ private:
     static CalculateEntityLoadingPriority _calculateEntityLoadingPriorityFunc;
     static std::function<bool()> _entitiesShouldFadeFunction;
 
-    static std::function<bool()> _renderDebugHullsOperator;
+    mutable std::mutex _spaceLock;
+    workload::SpacePointer _space{ new workload::Space() };
+    workload::Transaction::Updates _spaceUpdates;
+
+    static std::function<bool(const QUuid&, graphics::MaterialLayer, const std::string&)> _addMaterialToEntityOperator;
+    static std::function<bool(const QUuid&, graphics::MaterialPointer, const std::string&)> _removeMaterialFromEntityOperator;
+    static std::function<bool(const QUuid&, graphics::MaterialLayer, const std::string&)> _addMaterialToAvatarOperator;
+    static std::function<bool(const QUuid&, graphics::MaterialPointer, const std::string&)> _removeMaterialFromAvatarOperator;
+
 };
 
 

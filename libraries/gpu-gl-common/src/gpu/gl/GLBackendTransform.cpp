@@ -29,9 +29,9 @@ void GLBackend::do_setProjectionTransform(const Batch& batch, size_t paramOffset
 }
 
 void GLBackend::do_setProjectionJitter(const Batch& batch, size_t paramOffset) {
-	_transform._projectionJitter.x = batch._params[paramOffset]._float;
-	_transform._projectionJitter.y = batch._params[paramOffset+1]._float;
-	_transform._invalidProj = true;
+    _transform._projectionJitter.x = batch._params[paramOffset]._float;
+    _transform._projectionJitter.y = batch._params[paramOffset+1]._float;
+    _transform._invalidProj = true;
 }
 
 void GLBackend::do_setViewportTransform(const Batch& batch, size_t paramOffset) {
@@ -168,7 +168,8 @@ void GLBackend::TransformStageState::update(size_t commandIndex, const StereoSta
 
 void GLBackend::TransformStageState::bindCurrentCamera(int eye) const {
     if (_currentCameraOffset != INVALID_OFFSET) {
-        glBindBufferRange(GL_UNIFORM_BUFFER, TRANSFORM_CAMERA_SLOT, _cameraBuffer, _currentCameraOffset + eye * _cameraUboSize, sizeof(CameraBufferElement));
+        static_assert(slot::buffer::Buffer::CameraTransform >= MAX_NUM_UNIFORM_BUFFERS, "TransformCamera may overlap pipeline uniform buffer slots. Invalidate uniform buffer slot cache for safety (call _uniform._buffers[TRANSFORM_CAMERA_SLOT].reset()).");
+        glBindBufferRange(GL_UNIFORM_BUFFER, slot::buffer::Buffer::CameraTransform, _cameraBuffer, _currentCameraOffset + eye * _cameraUboSize, sizeof(CameraBufferElement));
     }
 }
 

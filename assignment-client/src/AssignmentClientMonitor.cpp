@@ -25,6 +25,9 @@
 #include "AssignmentClientChildData.h"
 #include "SharedUtil.h"
 #include <QtCore/QJsonDocument>
+#ifdef _POSIX_SOURCE
+#include <sys/resource.h>
+#endif
 
 const QString ASSIGNMENT_CLIENT_MONITOR_TARGET_NAME = "assignment-client-monitor";
 const int WAIT_FOR_CHILD_MSECS = 1000;
@@ -71,6 +74,7 @@ AssignmentClientMonitor::AssignmentClientMonitor(const unsigned int numAssignmen
     auto& packetReceiver = DependencyManager::get<NodeList>()->getPacketReceiver();
     packetReceiver.registerListener(PacketType::AssignmentClientStatus, this, "handleChildStatusPacket");
 
+    adjustOSResources(std::max(_numAssignmentClientForks, _maxAssignmentClientForks));
     // use QProcess to fork off a process for each of the child assignment clients
     for (unsigned int i = 0; i < _numAssignmentClientForks; i++) {
         spawnChildClient();
@@ -272,6 +276,7 @@ void AssignmentClientMonitor::checkSpares() {
 
     // Spawn or kill children, as needed.  If --min or --max weren't specified, allow the child count
     // to drift up or down as far as needed.
+
     if (spareCount < 1 || totalCount < _minAssignmentClientForks) {
         if (!_maxAssignmentClientForks || totalCount < _maxAssignmentClientForks) {
             spawnChildClient();
@@ -303,7 +308,7 @@ void AssignmentClientMonitor::handleChildStatusPacket(QSharedPointer<ReceivedMes
     AssignmentClientChildData* childData = nullptr;
 
     if (!matchingNode) {
-        // The parent only expects to be talking with prorams running on this same machine.
+        // The parent only expects to be talking with programs running on this same machine.
         if (senderSockAddr.getAddress() == QHostAddress::LocalHost ||
                 senderSockAddr.getAddress() == QHostAddress::LocalHostIPv6) {
 
@@ -312,9 +317,9 @@ void AssignmentClientMonitor::handleChildStatusPacket(QSharedPointer<ReceivedMes
                 matchingNode = DependencyManager::get<LimitedNodeList>()->addOrUpdateNode(senderID, NodeType::Unassigned,
                                                                                           senderSockAddr, senderSockAddr);
 
-                auto childData = std::unique_ptr<AssignmentClientChildData>
+                auto newChildData = std::unique_ptr<AssignmentClientChildData>
                     { new AssignmentClientChildData(Assignment::Type::AllTypes) };
-                matchingNode->setLinkedData(std::move(childData));
+                matchingNode->setLinkedData(std::move(newChildData));
             } else {
                 // tell unknown assignment-client child to exit.
                 qDebug() << "Asking unknown child at" << senderSockAddr << "to exit.";
@@ -325,9 +330,8 @@ void AssignmentClientMonitor::handleChildStatusPacket(QSharedPointer<ReceivedMes
                 return;
             }
         }
-    } else {
-        childData = dynamic_cast<AssignmentClientChildData*>(matchingNode->getLinkedData());
     }
+    childData = dynamic_cast<AssignmentClientChildData*>(matchingNode->getLinkedData());
 
     if (childData) {
         // update our records about how to reach this child
@@ -371,4 +375,28 @@ bool AssignmentClientMonitor::handleHTTPRequest(HTTPConnection* connection, cons
 
 
     return true;
+}
+
+void AssignmentClientMonitor::adjustOSResources(unsigned int numForks) const
+{
+#ifdef _POSIX_SOURCE
+    // QProcess on Unix uses six (I think) descriptors, some temporarily, for each child proc.
+    // Formula based on tests with a Ubuntu 16.04 VM.
+    unsigned requiredDescriptors = 30 + 6 * numForks;
+    struct rlimit descLimits;
+    if (getrlimit(RLIMIT_NOFILE, &descLimits) == 0) {
+        if (descLimits.rlim_cur < requiredDescriptors) {
+            descLimits.rlim_cur = requiredDescriptors;
+            if (setrlimit(RLIMIT_NOFILE, &descLimits) == 0) {
+                qDebug() << "Resetting descriptor limit to" << requiredDescriptors;
+            } else {
+                const char *const errorString = strerror(errno);
+                qDebug() << "Failed to reset descriptor limit to" << requiredDescriptors << ":" << errorString;
+            }
+        }
+    } else {
+        const char *const errorString = strerror(errno);
+        qDebug() << "Failed to read descriptor limit:" << errorString;
+    }
+#endif
 }

@@ -209,15 +209,14 @@ public:
     void set(const QString& key, const QString& value) { _map[key] = AnimVariant(value); }
     void unset(const QString& key) { _map.erase(key); }
 
-    void setTrigger(const QString& key) { _triggers.insert(key); }
-    void clearTriggers() { _triggers.clear(); }
+    void setTrigger(const QString& key) { _map[key] = AnimVariant(true); }
 
     void setRigToGeometryTransform(const glm::mat4& rigToGeometry) {
         _rigToGeometryMat = rigToGeometry;
         _rigToGeometryRot = glmExtractRotation(rigToGeometry);
     }
 
-    void clearMap() { _map.clear(); }
+    void clearMap() { _map.clear(); _triggers.clear(); }
     bool hasKey(const QString& key) const { return _map.find(key) != _map.end(); }
 
     const AnimVariant& get(const QString& key) const {
@@ -235,7 +234,10 @@ public:
     void animVariantMapFromScriptValue(const QScriptValue& object);
     void copyVariantsFrom(const AnimVariantMap& other);
 
-#ifdef NDEBUG
+    // For stat debugging.
+    std::map<QString, QString> toDebugMap() const;
+
+#ifndef NDEBUG
     void dump() const {
         qCDebug(animation) << "AnimVariantMap =";
         for (auto& pair : _map) {

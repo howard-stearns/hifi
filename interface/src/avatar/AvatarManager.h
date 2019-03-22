@@ -12,6 +12,8 @@
 #ifndef hifi_AvatarManager_h
 #define hifi_AvatarManager_h
 
+#include <set>
+
 #include <QtCore/QHash>
 #include <QtCore/QObject>
 #include <QtCore/QSharedPointer>
@@ -22,10 +24,17 @@
 #include <SimpleMovingAverage.h>
 #include <shared/RateCounter.h>
 #include <avatars-renderer/ScriptAvatar.h>
-#include <AudioInjector.h>
+#include <AudioInjectorManager.h>
+#include <workload/Space.h>
+#include <EntitySimulation.h> // for SetOfEntities
 
 #include "AvatarMotionState.h"
+#include "DetailedMotionState.h"
 #include "MyAvatar.h"
+#include "OtherAvatar.h"
+
+
+using SortedAvatar = std::pair<float, std::shared_ptr<Avatar>>;
 
 /**jsdoc 
  * The AvatarManager API has properties and methods which manage Avatars within the same domain.
@@ -37,6 +46,7 @@
  *
  * @hifi-interface
  * @hifi-client-entity
+ * @hifi-avatar
  *
  * @borrows AvatarList.getAvatarIdentifiers as getAvatarIdentifiers
  * @borrows AvatarList.getAvatarsInRange as getAvatarsInRange
@@ -47,6 +57,7 @@
  * @borrows AvatarList.sessionUUIDChanged as sessionUUIDChanged
  * @borrows AvatarList.processAvatarDataPacket as processAvatarDataPacket
  * @borrows AvatarList.processAvatarIdentityPacket as processAvatarIdentityPacket
+ * @borrows AvatarList.processBulkAvatarTraits as processBulkAvatarTraits
  * @borrows AvatarList.processKillAvatar as processKillAvatar
  */
 
@@ -62,6 +73,7 @@ public:
     virtual ~AvatarManager();
 
     void init();
+    void setSpace(workload::SpacePointer& space );
 
     std::shared_ptr<MyAvatar> getMyAvatar() { return _myAvatar; }
     glm::vec3 getMyAvatarPosition() const { return _myAvatar->getWorldPosition(); }
@@ -78,19 +90,24 @@ public:
 
     int getNumAvatarsUpdated() const { return _numAvatarsUpdated; }
     int getNumAvatarsNotUpdated() const { return _numAvatarsNotUpdated; }
+    int getNumHeroAvatars() const { return _numHeroAvatars; }
+    int getNumHeroAvatarsUpdated() const { return _numHeroAvatarsUpdated; }
     float getAvatarSimulationTime() const { return _avatarSimulationTime; }
 
     void updateMyAvatar(float deltaTime);
     void updateOtherAvatars(float deltaTime);
 
+    void setMyAvatarDataPacketsPaused(bool puase);
+
     void postUpdate(float deltaTime, const render::ScenePointer& scene);
 
-    void clearOtherAvatars();
+    void clearOtherAvatars() override;
     void deleteAllAvatars();
 
     void getObjectsToRemoveFromPhysics(VectorOfMotionStates& motionStates);
     void getObjectsToAddToPhysics(VectorOfMotionStates& motionStates);
     void getObjectsToChange(VectorOfMotionStates& motionStates);
+
     void handleChangedMotionStates(const VectorOfMotionStates& motionStates);
     void handleCollisionEvents(const CollisionEvents& collisionEvents);
 
@@ -101,23 +118,21 @@ public:
      * @returns {number}
      */
     Q_INVOKABLE float getAvatarDataRate(const QUuid& sessionID, const QString& rateName = QString("")) const;
-    
+
     /**jsdoc
      * @function AvatarManager.getAvatarUpdateRate
      * @param {Uuid} sessionID
      * @param {string} [rateName=""]
      * @returns {number}
      */
-    
     Q_INVOKABLE float getAvatarUpdateRate(const QUuid& sessionID, const QString& rateName = QString("")) const;
-    
+
     /**jsdoc
      * @function AvatarManager.getAvatarSimulationRate
      * @param {Uuid} sessionID
      * @param {string} [rateName=""]
      * @returns {number}
      */
-   
     Q_INVOKABLE float getAvatarSimulationRate(const QUuid& sessionID, const QString& rateName = QString("")) const;
 
     /**jsdoc
@@ -125,21 +140,36 @@ public:
      * @param {PickRay} ray
      * @param {Uuid[]} [avatarsToInclude=[]]
      * @param {Uuid[]} [avatarsToDiscard=[]]
+     * @param {boolean} pickAgainstMesh
      * @returns {RayToAvatarIntersectionResult}
      */
     Q_INVOKABLE RayToAvatarIntersectionResult findRayIntersection(const PickRay& ray,
                                                                   const QScriptValue& avatarIdsToInclude = QScriptValue(),
-                                                                  const QScriptValue& avatarIdsToDiscard = QScriptValue());
+                                                                  const QScriptValue& avatarIdsToDiscard = QScriptValue(),
+                                                                  bool pickAgainstMesh = true);
     /**jsdoc
      * @function AvatarManager.findRayIntersectionVector
      * @param {PickRay} ray
      * @param {Uuid[]} avatarsToInclude
      * @param {Uuid[]} avatarsToDiscard
+     * @param {boolean} pickAgainstMesh
      * @returns {RayToAvatarIntersectionResult}
      */
     Q_INVOKABLE RayToAvatarIntersectionResult findRayIntersectionVector(const PickRay& ray,
                                                                         const QVector<EntityItemID>& avatarsToInclude,
-                                                                        const QVector<EntityItemID>& avatarsToDiscard);
+                                                                        const QVector<EntityItemID>& avatarsToDiscard,
+                                                                        bool pickAgainstMesh);
+
+    /**jsdoc
+     * @function AvatarManager.findParabolaIntersectionVector
+     * @param {PickParabola} pick
+     * @param {Uuid[]} avatarsToInclude
+     * @param {Uuid[]} avatarsToDiscard
+     * @returns {ParabolaToAvatarIntersectionResult}
+     */
+    Q_INVOKABLE ParabolaToAvatarIntersectionResult findParabolaIntersectionVector(const PickParabola& pick,
+                                                                                  const QVector<EntityItemID>& avatarsToInclude,
+                                                                                  const QVector<EntityItemID>& avatarsToDiscard);
 
     /**jsdoc
      * @function AvatarManager.getAvatarSortCoefficient
@@ -148,7 +178,7 @@ public:
      */
     // TODO: remove this HACK once we settle on optimal default sort coefficients
     Q_INVOKABLE float getAvatarSortCoefficient(const QString& name);
-   
+
     /**jsdoc
      * @function AvatarManager.setAvatarSortCoefficient
      * @param {string} name
@@ -156,15 +186,35 @@ public:
      */
     Q_INVOKABLE void setAvatarSortCoefficient(const QString& name, const QScriptValue& value);
 
+    /**jsdoc
+     * Used in the PAL for getting PAL-related data about avatars nearby. Using this method is faster
+     * than iterating over each avatar and obtaining data about them in JavaScript, as that method
+     * locks and unlocks each avatar's data structure potentially hundreds of times per update tick.
+     * @function AvatarManager.getPalData
+     * @param {string[]} [specificAvatarIdentifiers=[]] - The list of IDs of the avatars you want the PAL data for.
+     * If an empty list, the PAL data for all nearby avatars is returned.
+     * @returns {object[]} An array of objects, each object being the PAL data for an avatar.
+     */
+    Q_INVOKABLE QVariantMap getPalData(const QStringList& specificAvatarIdentifiers = QStringList());
+
     float getMyAvatarSendRate() const { return _myAvatarSendRate.rate(); }
 
-public slots:
+    void queuePhysicsChange(const OtherAvatarPointer& avatar);
+    void buildPhysicsTransaction(PhysicsEngine::Transaction& transaction);
+    void handleProcessedPhysicsTransaction(PhysicsEngine::Transaction& transaction);
+    void removeDeadAvatarEntities(const SetOfEntities& deadEntities);
 
+    void accumulateGrabPositions(std::map<QUuid, GrabLocationAccumulator>& grabAccumulators);
+
+public slots:
     /**jsdoc
      * @function AvatarManager.updateAvatarRenderStatus
      * @param {boolean} shouldRenderAvatars
      */
     void updateAvatarRenderStatus(bool shouldRenderAvatars);
+
+protected:
+    AvatarSharedPointer addAvatar(const QUuid& sessionUUID, const QWeakPointer<Node>& mixerWeakPointer) override;
 
 private:
     explicit AvatarManager(QObject* parent = 0);
@@ -172,28 +222,39 @@ private:
 
     void simulateAvatarFades(float deltaTime);
 
-    AvatarSharedPointer newSharedAvatar() override;
-    void deleteMotionStates();
-    void handleRemovedAvatar(const AvatarSharedPointer& removedAvatar, KillAvatarReason removalReason = KillAvatarReason::NoReason) override;
+    AvatarSharedPointer newSharedAvatar(const QUuid& sessionUUID) override;
 
-    QVector<AvatarSharedPointer> _avatarsToFade;
+    // called only from the AvatarHashMap thread - cannot be called while this thread holds the
+    // hash lock, since handleRemovedAvatar needs a write lock on the entity tree and the entity tree
+    // frequently grabs a read lock on the hash to get a given avatar by ID
+    void handleRemovedAvatar(const AvatarSharedPointer& removedAvatar,
+                             KillAvatarReason removalReason = KillAvatarReason::NoReason) override;
+    void handleTransitAnimations(AvatarTransit::Status status);
 
-    using AvatarMotionStateMap = QMap<Avatar*, AvatarMotionState*>;
-    AvatarMotionStateMap _motionStates;
-    VectorOfMotionStates _motionStatesToRemoveFromPhysics;
-    VectorOfMotionStates _motionStatesToDelete;
-    SetOfMotionStates _motionStatesToAddToPhysics;
+    QVector<AvatarSharedPointer> _avatarsToFadeOut;
+
+    using SetOfOtherAvatars = std::set<OtherAvatarPointer>;
+    SetOfOtherAvatars _avatarsToChangeInPhysics;
 
     std::shared_ptr<MyAvatar> _myAvatar;
     quint64 _lastSendAvatarDataTime = 0; // Controls MyAvatar send data rate.
 
-    std::list<AudioInjectorPointer> _collisionInjectors;
+    std::list<QWeakPointer<AudioInjector>> _collisionInjectors;
 
     RateCounter<> _myAvatarSendRate;
     int _numAvatarsUpdated { 0 };
     int _numAvatarsNotUpdated { 0 };
+    int _numHeroAvatars{ 0 };
+    int _numHeroAvatarsUpdated{ 0 };
     float _avatarSimulationTime { 0.0f };
     bool _shouldRender { true };
+    bool _myAvatarDataPacketsPaused { false };
+
+    mutable std::mutex _spaceLock;
+    workload::SpacePointer _space;
+    std::vector<int32_t> _spaceProxiesToDelete;
+
+    AvatarTransit::TransitConfig  _transitConfig;
 };
 
 #endif // hifi_AvatarManager_h

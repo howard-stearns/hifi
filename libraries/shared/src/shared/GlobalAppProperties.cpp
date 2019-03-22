@@ -14,6 +14,7 @@ namespace hifi { namespace properties {
     const char* STEAM = "com.highfidelity.launchedFromSteam";
     const char* LOGGER = "com.highfidelity.logger";
     const char* OCULUS_STORE = "com.highfidelity.oculusStore";
+    const char* STANDALONE = "com.highfidelity.standalone";
     const char* TEST = "com.highfidelity.test";
     const char* TRACING = "com.highfidelity.tracing";
     const char* HMD = "com.highfidelity.hmd";
@@ -21,7 +22,6 @@ namespace hifi { namespace properties {
 
     namespace gl {
         const char* BACKEND = "com.highfidelity.gl.backend";
-        const char* MAKE_PROGRAM_CALLBACK = "com.highfidelity.gl.makeProgram";
         const char* PRIMARY_CONTEXT = "com.highfidelity.gl.primaryContext";
     }
 

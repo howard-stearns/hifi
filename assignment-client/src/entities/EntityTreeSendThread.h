@@ -31,7 +31,7 @@ public:
     EntityTreeSendThread(OctreeServer* myServer, const SharedNodePointer& node);
 
 protected:
-    void traverseTreeAndSendContents(SharedNodePointer node, OctreeQueryNode* nodeData,
+    bool traverseTreeAndSendContents(SharedNodePointer node, OctreeQueryNode* nodeData,
             bool viewFrustumChanged, bool isFullScene) override;
 
 private slots:
@@ -42,7 +42,7 @@ private:
     bool addAncestorsToExtraFlaggedEntities(const QUuid& filteredEntityID, EntityItem& entityItem, EntityNodeData& nodeData);
     bool addDescendantsToExtraFlaggedEntities(const QUuid& filteredEntityID, EntityItem& entityItem, EntityNodeData& nodeData);
 
-    void startNewTraversal(const DiffTraversal::View& viewFrustum, EntityTreeElementPointer root);
+    void startNewTraversal(const DiffTraversal::View& viewFrustum, EntityTreeElementPointer root, bool forceFirstPass = false);
     bool traverseTreeAndBuildNextPacketPayload(EncodeBitstreamParams& params, const QJsonObject& jsonFilters) override;
 
     void preDistributionProcessing() override;

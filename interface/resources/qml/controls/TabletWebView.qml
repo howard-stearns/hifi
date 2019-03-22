@@ -1,8 +1,7 @@
 import QtQuick 2.7
-import QtWebEngine 1.5
-import "../controls-uit" as HiFiControls
+import controlsUit 1.0 as HiFiControls
 import "../styles" as HifiStyles
-import "../styles-uit"
+import stylesUit 1.0
 
 Item {
     id: root
@@ -11,18 +10,20 @@ Item {
     height: parent !== null ? parent.height : undefined
     property var parentStackItem: null
     property int headerHeight: 70
-    property string url
     property string scriptURL
     property bool keyboardEnabled: false
     property bool keyboardRaised: false
     onKeyboardRaisedChanged: {
         if(!keyboardRaised) {
             webroot.unfocus();
+        } else {
+            webroot.stopUnfocus();
         }
     }
     property bool punctuationMode: false
     property bool passwordField: false
     property bool isDesktop: false
+    property alias url: web.url
     property alias webView: web.webViewCore
     property alias profile: web.webViewCoreProfile
     property bool remove: false
@@ -52,12 +53,18 @@ Item {
                 id: back
                 enabledColor: hifi.colors.darkGray
                 disabledColor: hifi.colors.lightGrayText
-                enabled: historyIndex > 0
+                enabled: true
                 text: "BACK"
 
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: goBack()
+                    onClicked: {
+                        if (historyIndex > 0) {
+                            goBack();
+                        } else {
+                            closeWebEngine();
+                        }
+                    }
                 }
             }
 
@@ -81,7 +88,7 @@ Item {
             color: hifi.colors.baseGray
             font.pixelSize: 12
             verticalAlignment: Text.AlignLeft
-            text: root.url
+            text: web.url
             anchors {
                 top: nav.bottom
                 horizontalCenter: parent.horizontalCenter;
@@ -131,11 +138,11 @@ Item {
 
     function loadUrl(url) {
         web.webViewCore.url = url
-        root.url = web.webViewCore.url;
     }
 
-    onUrlChanged: {
-        loadUrl(url);
+    Rectangle {
+        anchors.fill: web;
+        color: hifi.colors.white;
     }
 
     FlickableWebViewCore {
@@ -187,6 +194,10 @@ Item {
     Component.onCompleted: {
         root.isDesktop = (typeof desktop !== "undefined");
         keyboardEnabled = HMD.active;
+    }
+
+    Component.onDestruction: {
+        keyboardRaised = false;
     }
 
     Keys.onPressed: {

@@ -57,16 +57,22 @@ public:
     void pluginFocusOutEvent() override { _inputDevice->focusOutEvent(); }
     void pluginUpdate(float deltaTime, const controller::InputCalibrationData& inputCalibrationData) override;
 
-    void setRenderControllers(bool renderControllers) { _renderControllers = renderControllers; }
-
     virtual void saveSettings() const override;
     virtual void loadSettings() override;
+
+    enum class OutOfRangeDataStrategy {
+        None,
+        Freeze,
+        Drop,
+        DropAfterDelay
+    };
 
 private:
     class InputDevice : public controller::InputDevice {
     public:
         InputDevice(vr::IVRSystem*& system);
         bool isHeadControllerMounted() const { return _overrideHead; }
+
     private:
         // Device functions
         controller::Input::NamedVector getAvailableInputs() const override;
@@ -164,6 +170,7 @@ private:
         FilteredStick _filteredLeftStick;
         FilteredStick _filteredRightStick;
         std::string _headsetName {""};
+        OutOfRangeDataStrategy _outOfRangeDataStrategy { OutOfRangeDataStrategy::Drop };
 
         std::vector<PuckPosePair> _validTrackedObjects;
         std::map<uint32_t, glm::mat4> _pucksPostOffset;
@@ -199,6 +206,8 @@ private:
 
         bool _hmdTrackingEnabled { true };
 
+        std::map<uint32_t, uint64_t> _simDataRunningOkTimestampMap;
+
         QString configToString(Config config);
         friend class ViveControllerManager;
     };
@@ -207,19 +216,16 @@ private:
     bool isDesktopMode();
     bool _registeredWithInputMapper { false };
     bool _modelLoaded { false };
-    bool _resetMatCalculated { false };
 
     bool _desktopMode { false };
     bool _hmdDesktopTracking { false };
-    
-    glm::mat4 _resetMat { glm::mat4() };
+
     graphics::Geometry _modelGeometry;
     gpu::TexturePointer _texture;
 
     int _leftHandRenderID { 0 };
     int _rightHandRenderID { 0 };
 
-    bool _renderControllers { false };
     vr::IVRSystem* _system { nullptr };
     std::shared_ptr<InputDevice> _inputDevice { std::make_shared<InputDevice>(_system) };
 

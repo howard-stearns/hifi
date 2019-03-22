@@ -15,8 +15,8 @@
 
 <@include taa.slh@>
 
-in vec2 varTexCoord0;
-layout(location = 0) out vec4 outFragColor;
+layout(location=0) in vec2 varTexCoord0;
+layout(location=0) out vec4 outFragColor;
 
 void main() {
     vec2 fragUV = varTexCoord0;
@@ -35,17 +35,11 @@ void main() {
     vec2 prevFragUV = taa_fetchSourceAndHistory(fragUV, fragVel, sourceColor, historyColor);
 
     vec3 nextColor = sourceColor;
- 
-    if (taa_constrainColor()) {
-        // clamp history to neighbourhood of current sample
-        historyColor = taa_evalConstrainColor(sourceColor, fragUV, fragVel, historyColor);
-    }
-    
-    if (taa_feedbackColor()) {
-        nextColor = taa_evalFeedbackColor(sourceColor, historyColor, params.blend);
-    } else {
-        nextColor = mix(historyColor, sourceColor, params.blend);
-    }
+
+    // clamp history to neighbourhood of current sample
+    historyColor = mix(historyColor, taa_evalConstrainColor(sourceColor, fragUV, fragVel, historyColor), float(taa_constrainColor()));
+
+    nextColor = mix(mix(historyColor, sourceColor, params.blend), taa_evalFeedbackColor(sourceColor, historyColor, params.blend), float(taa_feedbackColor()));
 
     outFragColor = vec4(taa_resolveColor(nextColor), 1.0);
 }

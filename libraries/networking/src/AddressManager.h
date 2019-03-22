@@ -23,6 +23,8 @@
 #include "AccountManager.h"
 
 extern const QString DEFAULT_HIFI_ADDRESS;
+extern const QString REDIRECT_HIFI_ADDRESS;
+extern const QString DEFAULT_HOME_ADDRESS;
 
 const QString SANDBOX_HIFI_ADDRESS = "hifi://localhost";
 const QString INDEX_PATH = "/";
@@ -41,6 +43,7 @@ const QString GET_PLACE = "/api/v1/places/%1";
  *
  * @hifi-interface
  * @hifi-client-entity
+ * @hifi-avatar
  * @hifi-assignment-client
  *
  * @property {Uuid} domainID - A UUID uniquely identifying the domain you're visiting. Is {@link Uuid|Uuid.NULL} if you're not
@@ -55,7 +58,6 @@ const QString GET_PLACE = "/api/v1/places/%1";
  *     <em>Read-only.</em>
  * @property {boolean} isConnected - <code>true</code> if you're connected to the domain in your current <code>href</code>
  *     metaverse address, otherwise <code>false</code>.
- *     <em>Read-only.</em>
  * @property {string} pathname - The location and orientation in your current <code>href</code> metaverse address 
  *     (e.g., <code>"/15,-10,26/0,0,0,1"</code>).
  *     <em>Read-only.</em>
@@ -164,6 +166,8 @@ public:
     QString currentPath(bool withOrientation = true) const;
     QString currentFacingPath() const;
 
+    QUrl lastAddress() const;
+
     const QUuid& getRootPlaceID() const { return _rootPlaceID; }
     QString getPlaceName() const;
     QString getDomainID() const;
@@ -191,7 +195,7 @@ public slots:
      *    Helps ensure that user's location history is correctly maintained.
      */
     void handleLookupString(const QString& lookupString, bool fromSuggestions = false);
-    
+
     /**jsdoc
      * Go to a position and orientation resulting from a lookup for a named path in the domain (set in the domain server's 
      * settings).
@@ -226,8 +230,9 @@ public slots:
      * @param {location.LookupTrigger} trigger=StartupFromSettings - The reason for the function call. Helps ensure that user's
      *     location history is correctly maintained.
      */
-    void goToLocalSandbox(QString path = "", LookupTrigger trigger = LookupTrigger::StartupFromSettings) { handleUrl(SANDBOX_HIFI_ADDRESS + path, trigger); }
-    
+    void goToLocalSandbox(QString path = "", LookupTrigger trigger = LookupTrigger::StartupFromSettings) {
+        handleUrl(SANDBOX_HIFI_ADDRESS + path, trigger); }
+
     /**jsdoc
      * Go to the default "welcome" metaverse address.
      * @function location.goToEntry
@@ -244,6 +249,18 @@ public slots:
      *     them, otherwise go to the user's exact location and orientation.
      */
     void goToUser(const QString& username, bool shouldMatchOrientation = true);
+
+    /**jsdoc
+    * Go to the last address tried.  This will be the last URL tried from location.handleLookupString
+    * @function location.goToLastAddress
+    */
+    void goToLastAddress() { handleUrl(_lastVisitedURL, LookupTrigger::AttemptedRefresh); }
+
+    /**jsdoc
+    * Returns if going back is possible.
+    * @function location.canGoBack
+    */
+    bool canGoBack() const;
 
     /**jsdoc
      * Refresh the current address, e.g., after connecting to a domain in order to position the user to the desired location.
@@ -417,13 +434,13 @@ signals:
     void goForwardPossible(bool isPossible);
 
 private slots:
-    void handleAPIResponse(QNetworkReply& requestReply);
-    void handleAPIError(QNetworkReply& errorReply);
+    void handleAPIResponse(QNetworkReply* requestReply);
+    void handleAPIError(QNetworkReply* errorReply);
 
-    void handleShareableNameAPIResponse(QNetworkReply& requestReply);
+    void handleShareableNameAPIResponse(QNetworkReply* requestReply);
 
 private:
-    void goToAddressFromObject(const QVariantMap& addressMap, const QNetworkReply& reply);
+    void goToAddressFromObject(const QVariantMap& addressMap, const QNetworkReply* reply);
 
     // Set host and port, and return `true` if it was changed.
     bool setHost(const QString& host, LookupTrigger trigger, quint16 port = 0);
@@ -446,6 +463,7 @@ private:
     void addCurrentAddressToHistory(LookupTrigger trigger);
 
     QUrl _domainURL;
+    QUrl _lastVisitedURL;
 
     QUuid _rootPlaceID;
     PositionGetter _positionGetter;
@@ -459,7 +477,7 @@ private:
 
     QString _newHostLookupPath;
 
-    QUrl _previousLookup;
+    QUrl _previousAPILookup;
 };
 
-#endif // hifi_AddressManager_h
+#endif  // hifi_AddressManager_h
