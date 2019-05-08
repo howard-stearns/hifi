@@ -442,6 +442,7 @@ public slots:
     void reloadResourceCaches();
 
     void updateHeartbeat() const;
+    void resetHeartbeat(int targetRate);
 
     static void deadlockApplication();
     static void unresponsiveApplication(); // cause main thread to be unresponsive for 35 seconds

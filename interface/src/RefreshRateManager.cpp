@@ -132,6 +132,7 @@ void RefreshRateManager::setRefreshRateRegime(RefreshRateManager::RefreshRateReg
     if (_refreshRateRegime != refreshRateRegime) {
         _refreshRateRegime = refreshRateRegime;
         updateRefreshRateController();
+        qApp->resetHeartbeat(_activeRefreshRate);
     }
 
 }

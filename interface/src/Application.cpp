@@ -384,7 +384,7 @@ public:
     static const unsigned long MAX_HEARTBEAT_AGE_USECS = 120 * USECS_PER_SECOND; // 2 mins with no checkin probably a deadlock
 #endif
     static const int WARNING_ELAPSED_HEARTBEAT = 500 * USECS_PER_MSEC; // warn if elapsed heartbeat average is large
-    static const int HEARTBEAT_SAMPLES = 100000; // ~5 seconds worth of samples
+    static const int HEARTBEAT_SAMPLES = 5 * 45; // 5 seconds of weighted average samples taken at up to 45 Hz.
 
     // Set the heartbeat on launch
     DeadlockWatchdogThread() {
@@ -429,6 +429,18 @@ public:
         updateHeartbeat();
         _paused = false;
     }
+
+    static void reset(int targetRate) {
+        // In the run method below, we report unexpected growth in heartbeat statistics.
+        // When changing operating target game rate, we set these statistics to the new expected
+        // values so that run will only report changes outside of that.
+        int targetPeriod = USECS_PER_SECOND / targetRate;
+        _heartbeat = usecTimestampNow();
+        _movingAverage.clear();
+        _maxElapsed = _maxElapsedAverage = targetPeriod;
+        _movingAverage.addSample(targetPeriod);
+    }
+
 
     void run() override {
         while (!_quit) {
@@ -2607,6 +2619,10 @@ void Application::showCursor(const Cursor::Icon& cursor) {
 
 void Application::updateHeartbeat() const {
     DeadlockWatchdogThread::updateHeartbeat();
+}
+
+void Application::resetHeartbeat(int targetRate) {
+    DeadlockWatchdogThread::reset(targetRate);
 }
 
 void Application::onAboutToQuit() {
