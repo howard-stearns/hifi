@@ -108,6 +108,7 @@ public:
     void softReset(QString reason);
 
     int getCheckInPacketsSinceLastReply() const { return _checkInPacketsSinceLastReply; }
+    void logQueue();
     bool checkInPacketTimeout();
     void clearPendingCheckins() { _checkInPacketsSinceLastReply = 0; }
 

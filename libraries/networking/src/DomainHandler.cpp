@@ -558,12 +558,24 @@ void DomainHandler::processDomainServerConnectionDeniedPacket(QSharedPointer<Rec
         }
     }
 }
+void DomainHandler::logQueue() {
+#ifdef DEBUG_EVENT_QUEUE
+    auto nodeList = DependencyManager::get<NodeList>();
+    int nodeListQueueSize = ::hifi::qt::getEventQueueSize(nodeList->thread());
+    int mainQueueSize = ::hifi::qt::getEventQueueSize(qApp->thread());
+    quint64 now = usecTimestampNow();
+    qCDebug(networking_ice) << "network qt queue: " << nodeListQueueSize << "main thread queue:" << mainQueueSize << "elapsed:" << (now - nodeList->getLastCheckin());
+    nodeList->noteAliveCheck(now);
+    QMetaObject::invokeMethod(nodeList.data(), &NodeList::announceAlive);
+#endif  // DEBUG_EVENT_QUEUE
+}
 
 bool DomainHandler::checkInPacketTimeout() {
     ++_checkInPacketsSinceLastReply;
 
     if (_checkInPacketsSinceLastReply > 1) {
         qCDebug(networking_ice) << "Silent domain checkins:" << _checkInPacketsSinceLastReply;
+        logQueue();
     }
 
     if (_checkInPacketsSinceLastReply > MAX_SILENT_DOMAIN_SERVER_CHECK_INS) {
@@ -572,13 +584,8 @@ bool DomainHandler::checkInPacketTimeout() {
 
         // we haven't heard back from DS in MAX_SILENT_DOMAIN_SERVER_CHECK_INS
         // so emit our signal that says that
-
-#ifdef DEBUG_EVENT_QUEUE
-        int nodeListQueueSize = ::hifi::qt::getEventQueueSize(nodeList->thread());
-        qCDebug(networking) << "Limit of silent domain checkins reached (network qt queue: " << nodeListQueueSize << ")";
-#else  // DEBUG_EVENT_QUEUE
         qCDebug(networking) << "Limit of silent domain checkins reached";
-#endif // DEBUG_EVENT_QUEUE
+        logQueue();
 
         emit limitOfSilentDomainCheckInsReached();
         return true;

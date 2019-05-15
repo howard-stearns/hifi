@@ -290,6 +290,18 @@ void NodeList::addSetOfNodeTypesToNodeInterestSet(const NodeSet& setOfNodeTypes)
     _nodeTypesOfInterest.unite(setOfNodeTypes);
 }
 
+void NodeList::noteAliveCheck(qint64 timestamp) {
+    if (_oldestAliveCheck == 0) {
+        _oldestAliveCheck = timestamp;
+    }
+}
+
+void NodeList::announceAlive() {
+    quint64 now = usecTimestampNow();
+    qCDebug(networking_ice) << "NodeList thread responds after" << (now - _oldestAliveCheck);
+    _oldestAliveCheck = 0;
+}
+
 void NodeList::sendDomainServerCheckIn() {
 
     // This function is called by the server check-in timer thread
@@ -434,6 +446,9 @@ void NodeList::sendDomainServerCheckIn() {
         int outstandingCheckins = _domainHandler.getCheckInPacketsSinceLastReply();
         int checkinCount = outstandingCheckins > 1 ? std::pow(2, outstandingCheckins - 2) : 1;
         checkinCount = std::min(checkinCount, MAX_CHECKINS_TOGETHER);
+        if (_oldestCheckinSent == 0) {
+            _oldestCheckinSent = usecTimestampNow();
+        }
         for (int i = 1; i < checkinCount; ++i) {
             auto packetCopy = domainPacket->createCopy(*domainPacket);
             sendPacket(std::move(packetCopy), domainSockAddr);
@@ -624,6 +639,7 @@ void NodeList::processDomainServerList(QSharedPointer<ReceivedMessage> message) 
     }
 
     // this is a packet from the domain server, reset the count of un-replied check-ins
+    _oldestCheckinSent = 0;
     _domainHandler.clearPendingCheckins();
 
     // emit our signal so listeners know we just heard from the DS

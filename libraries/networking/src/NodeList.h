@@ -102,10 +102,14 @@ public:
     virtual Node::LocalID getDomainLocalID() const override { return _domainHandler.getLocalID(); }
     virtual HifiSockAddr getDomainSockAddr() const override { return _domainHandler.getSockAddr(); }
 
+    qint64 getLastCheckin() { return _oldestCheckinSent; }
+    void noteAliveCheck(qint64 timestamp);
+
 public slots:
     void reset(QString reason, bool skipDomainHandlerReset = false);
     void resetFromDomainHandler() { reset("Reset from Domain Handler", true); }
-    
+
+    void announceAlive();
     void sendDomainServerCheckIn();
     void handleDSPathQuery(const QString& newPath);
 
@@ -173,6 +177,8 @@ private:
     bool _isShuttingDown { false };
     QTimer _keepAlivePingTimer;
     bool _requestsDomainListData { false };
+    quint64 _oldestCheckinSent;
+    quint64 _oldestAliveCheck;
 
     bool _sendDomainServerCheckInEnabled { true };
 
