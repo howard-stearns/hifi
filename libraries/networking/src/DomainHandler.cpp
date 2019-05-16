@@ -579,9 +579,6 @@ bool DomainHandler::checkInPacketTimeout() {
     }
 
     if (_checkInPacketsSinceLastReply > MAX_SILENT_DOMAIN_SERVER_CHECK_INS) {
-
-        auto nodeList = DependencyManager::get<NodeList>();
-
         // we haven't heard back from DS in MAX_SILENT_DOMAIN_SERVER_CHECK_INS
         // so emit our signal that says that
         qCDebug(networking) << "Limit of silent domain checkins reached";
