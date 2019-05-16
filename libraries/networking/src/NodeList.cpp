@@ -449,6 +449,7 @@ void NodeList::sendDomainServerCheckIn() {
         if (_oldestCheckinSent == 0) {
             _oldestCheckinSent = usecTimestampNow();
         }
+        qDebug() << "FIXME sending" << checkinCount << "checkin packets";
         for (int i = 1; i < checkinCount; ++i) {
             auto packetCopy = domainPacket->createCopy(*domainPacket);
             sendPacket(std::move(packetCopy), domainSockAddr);
@@ -632,6 +633,7 @@ void NodeList::processDomainServerConnectionTokenPacket(QSharedPointer<ReceivedM
 }
 
 void NodeList::processDomainServerList(QSharedPointer<ReceivedMessage> message) {
+    qDebug() << "FIXME processDomainServerList responding after" << (usecTimestampNow() - _oldestCheckinSent);
     if (_domainHandler.getSockAddr().isNull()) {
         qWarning() << "IGNORING DomainList packet while not connected to a Domain Server";
         // refuse to process this packet if we aren't currently connected to the DS
@@ -639,7 +641,7 @@ void NodeList::processDomainServerList(QSharedPointer<ReceivedMessage> message) 
     }
 
     // this is a packet from the domain server, reset the count of un-replied check-ins
-    _oldestCheckinSent = 0;
+     _oldestCheckinSent = 0;
     _domainHandler.clearPendingCheckins();
 
     // emit our signal so listeners know we just heard from the DS
