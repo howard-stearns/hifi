@@ -404,14 +404,14 @@ qint64 LimitedNodeList::sendUnreliablePacket(const NLPacket& packet, const Node&
 }
 
 qint64 LimitedNodeList::sendUnreliablePacket(const NLPacket& packet, const HifiSockAddr& sockAddr,
-        HMACAuth* hmacAuth) {
+        HMACAuth* hmacAuth, bool hrsFixmeVerbose) {
     Q_ASSERT(!packet.isPartOfMessage());
     Q_ASSERT_X(!packet.isReliable(), "LimitedNodeList::sendUnreliablePacket",
                "Trying to send a reliable packet unreliably.");
 
     fillPacketHeader(packet, hmacAuth);
 
-    return _nodeSocket.writePacket(packet, sockAddr);
+    return _nodeSocket.writePacket(packet, sockAddr, hrsFixmeVerbose);
 }
 
 qint64 LimitedNodeList::sendPacket(std::unique_ptr<NLPacket> packet, const Node& destinationNode) {
@@ -427,7 +427,7 @@ qint64 LimitedNodeList::sendPacket(std::unique_ptr<NLPacket> packet, const Node&
 }
 
 qint64 LimitedNodeList::sendPacket(std::unique_ptr<NLPacket> packet, const HifiSockAddr& sockAddr,
-                                   HMACAuth* hmacAuth) {
+                                   HMACAuth* hmacAuth, bool hrsFixmeVerbose) {
     Q_ASSERT(!packet->isPartOfMessage());
     if (packet->isReliable()) {
         fillPacketHeader(*packet, hmacAuth);
@@ -437,9 +437,10 @@ qint64 LimitedNodeList::sendPacket(std::unique_ptr<NLPacket> packet, const HifiS
 
         return size;
     } else {
-        auto size = sendUnreliablePacket(*packet, sockAddr, hmacAuth);
+        auto size = sendUnreliablePacket(*packet, sockAddr, hmacAuth, hrsFixmeVerbose);
         if (size < 0) {
             auto now = usecTimestampNow();
+            qCDebug(networking) << "For sendPacket failure on" << sockAddr << packet->getType();
             eachNode([now](const SharedNodePointer & node) {
                 qCDebug(networking) << "Stats for " << node->getPublicSocket() << "\n"
                     << "    Last Heard Microstamp: " << node->getLastHeardMicrostamp() << " (" << (now - node->getLastHeardMicrostamp()) << "usec ago)\n"

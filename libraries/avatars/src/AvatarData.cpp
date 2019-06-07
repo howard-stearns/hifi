@@ -256,6 +256,7 @@ QByteArray AvatarData::toByteArray(AvatarDataDetail dataDetail, quint64 lastSent
 
     lazyInitHeadData();
     ASSERT(maxDataSize == 0 || (size_t)maxDataSize >= AvatarDataPacket::MIN_BULK_PACKET_SIZE);
+    if (!(maxDataSize == 0 || (size_t)maxDataSize >= AvatarDataPacket::MIN_BULK_PACKET_SIZE)) qCDebug(avatars) << "HRS FIXME AvatarData::toByteArray assert fail for" << getDisplayName();
 
     // Leading flags, to indicate how much data is actually included in the packet...
     AvatarDataPacket::HasFlags wantedFlags = 0;
@@ -641,6 +642,7 @@ QByteArray AvatarData::toByteArray(AvatarDataDetail dataDetail, quint64 lastSent
     }
     const int numJoints = jointData.size();
     assert(numJoints <= 255);
+    if (!(numJoints <= 255)) qCDebug(avatars) << "HRS FIXME AvatarData::toByteArray joints assert fail for" << getDisplayName() << numJoints;
     const int jointBitVectorSize = calcBitVectorSize(numJoints);
 
     // include jointData if there is room for the most minimal section. i.e. no translations or rotations.

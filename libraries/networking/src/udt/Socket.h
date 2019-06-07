@@ -61,11 +61,11 @@ public:
     
     // Simple functions writing to the socket with no processing
     qint64 writeBasePacket(const BasePacket& packet, const HifiSockAddr& sockAddr);
-    qint64 writePacket(const Packet& packet, const HifiSockAddr& sockAddr);
+    qint64 writePacket(const Packet& packet, const HifiSockAddr& sockAddr, bool hrsFixmeVerbose = false);
     qint64 writePacket(std::unique_ptr<Packet> packet, const HifiSockAddr& sockAddr);
     qint64 writePacketList(std::unique_ptr<PacketList> packetList, const HifiSockAddr& sockAddr);
-    qint64 writeDatagram(const char* data, qint64 size, const HifiSockAddr& sockAddr);
-    qint64 writeDatagram(const QByteArray& datagram, const HifiSockAddr& sockAddr);
+    qint64 writeDatagram(const char* data, qint64 size, const HifiSockAddr& sockAddr, bool hrsFixmeVerbose = false);
+    qint64 writeDatagram(const QByteArray& datagram, const HifiSockAddr& sockAddr, bool hrsFixmeVerbose = false);
     
     void bind(const QHostAddress& address, quint16 port = 0);
     void rebind(quint16 port);

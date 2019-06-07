@@ -59,11 +59,22 @@ void Socket::bind(const QHostAddress& address, quint16 port) {
         auto sd = _udpSocket.socketDescriptor();
         int val = IP_PMTUDISC_DONT;
         setsockopt(sd, IPPROTO_IP, IP_MTU_DISCOVER, &val, sizeof(val));
-#elif defined(Q_OS_WINDOWS)
+#elif defined(Q_OS_WIN)
         auto sd = _udpSocket.socketDescriptor();
         int val = 0; // false
-        setsockopt(sd, IPPROTO_IP, IP_DONTFRAGMENT, &val, sizeof(val));
+        int valsize = sizeof(val);
+        if (getsockopt(sd, IPPROTO_IP, IP_DONTFRAGMENT, (char *)&val, &valsize)) {
+            qCWarning(networking) << "Socket::bind cannot getsockopt IP_DONTFRAGMENT" << WSAGetLastError();
+        } else {
+            qCDebug(networking) << "Socket::bind getsockopt IP_DONTFRAGMENT" << val;
+        }
+        val = 0;
+        if (setsockopt(sd, IPPROTO_IP, IP_DONTFRAGMENT, (const char *) &val, sizeof(val))) {
+            qCWarning(networking) << "Socket::bind Cannot setsockopt IP_DONTFRAGMENT" << WSAGetLastError();
+        }
 #endif
+    } else {
+        qCDebug(networking) << "Socket::bind is skipping setsockopt";
     }
 }
 
@@ -99,13 +110,23 @@ void Socket::setSystemBufferSizes() {
         if (oldBufferSize < numBytes) {
             _udpSocket.setSocketOption(bufferOpt, QVariant(numBytes));
             int newBufferSize = _udpSocket.socketOption(bufferOpt).toInt();
-
-            qCDebug(networking) << "Changed socket" << bufferTypeString << "buffer size from" << oldBufferSize << "to"
-                << newBufferSize << "bytes";
+            if (newBufferSize == numBytes) {
+                qCDebug(networking) << "socketOption" << bufferTypeString << "changed from" << oldBufferSize << "to" << newBufferSize;
+            } else {
+                qCWarning(networking) << "socketOption" << bufferTypeString << "failed to change from" << oldBufferSize << "to" << numBytes
+                    << "got" << newBufferSize;
+                numBytes = 2 * 65536;
+                int newBufferSize = _udpSocket.socketOption(bufferOpt).toInt();
+                if (newBufferSize == numBytes) {
+                    qCDebug(networking) << "socketOption" << bufferTypeString << "second try changed from" << oldBufferSize << "to" << newBufferSize;
+                } else {
+                    qCWarning(networking) << "socketOption" << bufferTypeString << "second try failed to change from" << oldBufferSize << "to" << numBytes
+                        << "got" << newBufferSize;
+                }
+            }
         } else {
             // don't make the buffer smaller
-            qCDebug(networking) << "Did not change socket" << bufferTypeString << "buffer size from" << oldBufferSize
-                << "since it is larger than desired size of" << numBytes;
+            qCDebug(networking) << "socketOption" << bufferTypeString << "not used to decrease" << oldBufferSize << "to" << numBytes;
         }
     }
 }
@@ -120,14 +141,16 @@ qint64 Socket::writeBasePacket(const udt::BasePacket& packet, const HifiSockAddr
     return writeDatagram(packet.getData(), packet.getDataSize(), sockAddr);
 }
 
-qint64 Socket::writePacket(const Packet& packet, const HifiSockAddr& sockAddr) {
+qint64 Socket::writePacket(const Packet& packet, const HifiSockAddr& sockAddr, bool hrsFixmeVerbose) {
     Q_ASSERT_X(!packet.isReliable(), "Socket::writePacket", "Cannot send a reliable packet unreliably");
 
+    if (hrsFixmeVerbose) qCDebug(networking) << "HRS FIXME writePacket aquiring lock";
     SequenceNumber sequenceNumber;
     {
         Lock lock(_unreliableSequenceNumbersMutex);
         sequenceNumber = ++_unreliableSequenceNumbers[sockAddr];
     }
+    if (hrsFixmeVerbose) qCDebug(networking) << "HRS FIXME writePacket aquired lock";
 
     auto connection = findOrCreateConnection(sockAddr, true);
     if (connection) {
@@ -138,7 +161,7 @@ qint64 Socket::writePacket(const Packet& packet, const HifiSockAddr& sockAddr) {
     // write the correct sequence number to the Packet here
     packet.writeSequenceNumber(sequenceNumber);
 
-    return writeDatagram(packet.getData(), packet.getDataSize(), sockAddr);
+    return writeDatagram(packet.getData(), packet.getDataSize(), sockAddr, hrsFixmeVerbose);
 }
 
 qint64 Socket::writePacket(std::unique_ptr<Packet> packet, const HifiSockAddr& sockAddr) {
@@ -217,21 +240,27 @@ void Socket::writeReliablePacketList(PacketList* packetList, const HifiSockAddr&
 #endif
 }
 
-qint64 Socket::writeDatagram(const char* data, qint64 size, const HifiSockAddr& sockAddr) {
-    return writeDatagram(QByteArray::fromRawData(data, size), sockAddr);
+qint64 Socket::writeDatagram(const char* data, qint64 size, const HifiSockAddr& sockAddr, bool hrsFixmeVerbose) {
+    return writeDatagram(QByteArray::fromRawData(data, size), sockAddr, hrsFixmeVerbose);
 }
 
-qint64 Socket::writeDatagram(const QByteArray& datagram, const HifiSockAddr& sockAddr) {
+qint64 Socket::writeDatagram(const QByteArray& datagram, const HifiSockAddr& sockAddr, bool hrsFixmeVerbose) {
 
+    if (hrsFixmeVerbose) qCDebug(networking) << "HRS FIXME writeDatagram start" << _udpSocket.bytesToWrite() << "pending";
     qint64 bytesWritten = _udpSocket.writeDatagram(datagram, sockAddr.getAddress(), sockAddr.getPort());
+    if (hrsFixmeVerbose) qCDebug(networking) << "HRS FIXME writeDatagram finished" << bytesWritten << _udpSocket.bytesToWrite() << "pending";
 
     if (bytesWritten < 0) {
-        qCDebug(networking) << "udt::writeDatagram (" << _udpSocket.state() << ") error - " << _udpSocket.error() << "(" << _udpSocket.errorString() << ")";
-
+        int wsaError = 0;
 #ifdef WIN32
-        int wsaError = WSAGetLastError();
-        qCDebug(networking) << "windows socket error " << wsaError;
+        wsaError = WSAGetLastError();
 #endif
+        size_t size = 0;
+        {
+            Lock lock(_unreliableSequenceNumbersMutex);
+            size = _unreliableSequenceNumbers.size();
+        }
+        qCDebug(networking) << "udt::writeDatagram (" << sockAddr << _udpSocket.state() << ") error - " << wsaError << _udpSocket.error() << "(" << _udpSocket.errorString() << ") sequence number count:" << size << "and" << _udpSocket.bytesToWrite() << "pending";
 
 #ifdef DEBUG_EVENT_QUEUE
         int nodeListQueueSize = ::hifi::qt::getEventQueueSize(thread());
@@ -499,7 +528,7 @@ std::vector<HifiSockAddr> Socket::getConnectionSockAddrs() {
 }
 
 void Socket::handleSocketError(QAbstractSocket::SocketError socketError) {
-    qCDebug(networking) << "udt::Socket (" << _udpSocket.state() << ") error - " << socketError << "(" << _udpSocket.errorString() << ")";
+    qCDebug(networking) << "udt::Socket (" << this << _udpSocket.state() << ") error - " << socketError << "(" << _udpSocket.errorString() << ")" << _udpSocket.bytesToWrite() << "pending";
 #ifdef DEBUG_EVENT_QUEUE
     int nodeListQueueSize = ::hifi::qt::getEventQueueSize(thread());
     qCDebug(networking) << "Networking queue size - " << nodeListQueueSize;

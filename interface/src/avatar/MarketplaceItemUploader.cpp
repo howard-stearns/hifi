@@ -188,7 +188,8 @@ void MarketplaceItemUploader::doUploadAvatar() {
     // TODO(huffman) add JSON escaping
     auto escapeJson = [](QString str) -> QString { return str; };
 
-    QString jsonString = "{\"marketplace_item\":{";
+    QString jsonString = "{\"bake\":true,\"marketplace_item\":{";
+        //"{\"marketplace_item\":{";
     jsonString += "\"title\":\"" + escapeJson(_title) + "\"";
 
     // Items cannot have their description updated after they have been submitted.
@@ -202,6 +203,7 @@ void MarketplaceItemUploader::doUploadAvatar() {
     jsonString += ",\"files\":\"" + QString::fromLatin1(_fileData.toBase64()) + "\"}}";
 
     QNetworkAccessManager& networkAccessManager = NetworkAccessManager::getInstance();
+    qDebug() << "HRS FIXME json" << jsonString;
 
     QNetworkReply* reply{ nullptr };
     if (creating) {
