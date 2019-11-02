@@ -1169,6 +1169,7 @@ void DomainServer::handleConnectedNode(SharedNodePointer newNode, quint64 reques
     // if this node is a user (unassigned Agent), signal
     if (newNode->getType() == NodeType::Agent && !nodeData->wasAssigned()) {
         emit userConnected();
+        screensharePresence("whole domain", nodeData->getUsername()); // FIXME HRS: on screensharePresence packet instead
     }
 
     if (shouldReplicateNode(*newNode)) {
@@ -3125,6 +3126,7 @@ void DomainServer::nodeKilled(SharedNodePointer node) {
             // if this node is a user (unassigned Agent), signal
             if (!nodeData->wasAssigned()) {
                 emit userDisconnected();
+                screensharePresence("", nodeData->getUsername()); // FIXME HRS: on screensharePresence packet instead
             }
         }
     }
@@ -3612,4 +3614,46 @@ void DomainServer::handleOctreeFileReplacementRequest(QSharedPointer<ReceivedMes
         }
         handleOctreeFileReplacement(message->readAll(), QString(), QString(), username);
     }
+}
+
+void DomainServer::screensharePresence(QString roomname, QString username, int expiration_seconds) {
+    if (!DependencyManager::get<AccountManager>()->hasValidAccessToken()) {
+        qCDebug(domain_server) << "FIXME HRS: No authority to send screensharePresence.";
+        return;
+    }
+    JSONCallbackParameters callbackParams;
+    callbackParams.callbackReceiver = this;
+    callbackParams.jsonCallbackMethod = "handleSuccessfulScreensharePresence";
+    callbackParams.errorCallbackMethod = "handleFailedScreensharePresence";
+    // FIXME HRS: when we get the server up, everything that say FIXME SERVER will change a bit.
+    // For now, we're using a "similar" endpoint.
+    const QString PATH = "api/v1/user/friends"; // FIXME server "api/v1/domains/%1/screenshare"
+    QString domain_id = uuidStringWithoutCurlyBraces(getID());
+    QJsonObject json, screenshare;
+    screenshare["roomname"] = roomname;
+    screenshare["username"] = username;
+    if (expiration_seconds > 0) {
+        screenshare["expiration"] = expiration_seconds;
+    }
+    json["screenshare"] = screenshare;
+    DependencyManager::get<AccountManager>()->sendRequest(
+        PATH, // FIXME server .arg(domain_id)
+        AccountManagerAuth::Required,
+        QNetworkAccessManager::GetOperation, // FIXME server POST
+        callbackParams, QByteArray() //FIXME server: QJsonDocument(json).toJson()
+        );
+    qCDebug(domain_server) << "FIXME HRS: sent 'screensharePresence'" << domain_id << QJsonDocument(json).toJson();
+}
+
+void DomainServer::handleSuccessfulScreensharePresence(QNetworkReply* requestReply) {
+    QJsonObject jsonObject = QJsonDocument::fromJson(requestReply->readAll()).object();
+    if (jsonObject["status"].toString() == "success") {
+        qCDebug(domain_server) << "FIXME HRS: screensharePresence sent.";
+    } else {
+        qCWarning(domain_server) << "FIXME HRS: screensharePresence api call failed:" << QJsonDocument(jsonObject).toJson(QJsonDocument::Compact);
+    }
+}
+
+void DomainServer::handleFailedScreensharePresence(QNetworkReply* requestReply) {
+    qCWarning(domain_server) << "FIXME HRS: screensharePresence api call failed:" << requestReply->error();
 }
