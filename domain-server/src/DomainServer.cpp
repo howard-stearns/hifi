@@ -3646,9 +3646,7 @@ void DomainServer::screensharePresence(QString roomname, QString username, int e
     callbackParams.callbackReceiver = this;
     callbackParams.jsonCallbackMethod = "handleSuccessfulScreensharePresence";
     callbackParams.errorCallbackMethod = "handleFailedScreensharePresence";
-    // FIXME HRS: when we get the server up, everything that say FIXME SERVER will change a bit.
-    // For now, we're using a "similar" endpoint.
-    const QString PATH = "api/v1/user/friends"; // FIXME server "api/v1/domains/%1/screenshare"
+    const QString PATH = "api/v1/domains/%1/screenshare";
     QString domain_id = uuidStringWithoutCurlyBraces(getID());
     QJsonObject json, screenshare;
     screenshare["username"] = username;
@@ -3658,12 +3656,11 @@ void DomainServer::screensharePresence(QString roomname, QString username, int e
     }
     json["screenshare"] = screenshare;
     DependencyManager::get<AccountManager>()->sendRequest(
-        PATH, // FIXME server .arg(domain_id)
+        PATH.arg(domain_id),
         AccountManagerAuth::Required,
-        QNetworkAccessManager::GetOperation, // FIXME server POST
-        callbackParams, QByteArray() //FIXME server: QJsonDocument(json).toJson()
+        QNetworkAccessManager::PostOperation,
+        callbackParams, QJsonDocument(json).toJson()
         );
-    qCDebug(domain_server) << "FIXME HRS: sent 'screensharePresence'" << QJsonDocument(json).toJson();
 }
 
 void DomainServer::handleSuccessfulScreensharePresence(QNetworkReply* requestReply) {
