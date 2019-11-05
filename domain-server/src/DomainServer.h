@@ -98,6 +98,7 @@ private slots:
     void processNodeDisconnectRequestPacket(QSharedPointer<ReceivedMessage> message);
     void processICEServerHeartbeatDenialPacket(QSharedPointer<ReceivedMessage> message);
     void processICEServerHeartbeatACK(QSharedPointer<ReceivedMessage> message);
+    void processAvatarZonePresencePacket(QSharedPointer<ReceivedMessage> packet);
 
     void handleDomainContentReplacementFromURLRequest(QSharedPointer<ReceivedMessage> message);
     void handleOctreeFileReplacementRequest(QSharedPointer<ReceivedMessage> message);

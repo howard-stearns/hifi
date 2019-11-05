@@ -766,6 +766,7 @@ void DomainServer::setupNodeListAndAssignments() {
     packetReceiver.registerListener(PacketType::DomainServerPathQuery, this, "processPathQueryPacket");
     packetReceiver.registerListener(PacketType::NodeJsonStats, this, "processNodeJSONStatsPacket");
     packetReceiver.registerListener(PacketType::DomainDisconnectRequest, this, "processNodeDisconnectRequestPacket");
+    packetReceiver.registerListener(PacketType::AvatarZonePresence, this, "processAvatarZonePresencePacket");
 
     // NodeList won't be available to the settings manager when it is created, so call registerListener here
     packetReceiver.registerListener(PacketType::DomainSettingsRequest, &_settingsManager, "processSettingsRequestPacket");
@@ -1169,7 +1170,6 @@ void DomainServer::handleConnectedNode(SharedNodePointer newNode, quint64 reques
     // if this node is a user (unassigned Agent), signal
     if (newNode->getType() == NodeType::Agent && !nodeData->wasAssigned()) {
         emit userConnected();
-        screensharePresence("whole domain", nodeData->getUsername()); // FIXME HRS: on screensharePresence packet instead
     }
 
     if (shouldReplicateNode(*newNode)) {
@@ -3126,7 +3126,6 @@ void DomainServer::nodeKilled(SharedNodePointer node) {
             // if this node is a user (unassigned Agent), signal
             if (!nodeData->wasAssigned()) {
                 emit userDisconnected();
-                screensharePresence("", nodeData->getUsername()); // FIXME HRS: on screensharePresence packet instead
             }
         }
     }
@@ -3616,9 +3615,31 @@ void DomainServer::handleOctreeFileReplacementRequest(QSharedPointer<ReceivedMes
     }
 }
 
+void DomainServer::processAvatarZonePresencePacket(QSharedPointer<ReceivedMessage> message) {
+    QUuid avatar = QUuid::fromRfc4122(message->readWithoutCopy(NUM_BYTES_RFC4122_UUID));
+    QUuid zone = QUuid::fromRfc4122(message->readWithoutCopy(NUM_BYTES_RFC4122_UUID));
+
+    if (avatar.isNull()) {
+        qCWarning(domain_server) << "Ignoring null avatar presence";
+        return;
+    }
+    auto limitedNodeList = DependencyManager::get<LimitedNodeList>();
+    auto matchingNode = limitedNodeList->nodeWithUUID(avatar);
+    if (!matchingNode) {
+        qCWarning(domain_server) << "Ignoring avatar presence for unknown avatar" << avatar;
+        return;
+    }
+    QString verifiedUsername = matchingNode->getPermissions().getVerifiedUserName();
+    static int SCREENSHARE_EXPIRATION_SECONDS = 24 * 60 * 60;
+    screensharePresence(zone.isNull() ? "" : zone.toString(), verifiedUsername, SCREENSHARE_EXPIRATION_SECONDS);
+}
+
 void DomainServer::screensharePresence(QString roomname, QString username, int expiration_seconds) {
     if (!DependencyManager::get<AccountManager>()->hasValidAccessToken()) {
-        qCDebug(domain_server) << "FIXME HRS: No authority to send screensharePresence.";
+        static std::once_flag presenceAuthorityWarning;
+        std::call_once(presenceAuthorityWarning, [] {
+            qCDebug(domain_server) << "No authority to send screensharePresence.";
+        });
         return;
     }
     JSONCallbackParameters callbackParams;
@@ -3630,8 +3651,8 @@ void DomainServer::screensharePresence(QString roomname, QString username, int e
     const QString PATH = "api/v1/user/friends"; // FIXME server "api/v1/domains/%1/screenshare"
     QString domain_id = uuidStringWithoutCurlyBraces(getID());
     QJsonObject json, screenshare;
-    screenshare["roomname"] = roomname;
     screenshare["username"] = username;
+    screenshare["roomname"] = roomname;
     if (expiration_seconds > 0) {
         screenshare["expiration"] = expiration_seconds;
     }
@@ -3642,18 +3663,16 @@ void DomainServer::screensharePresence(QString roomname, QString username, int e
         QNetworkAccessManager::GetOperation, // FIXME server POST
         callbackParams, QByteArray() //FIXME server: QJsonDocument(json).toJson()
         );
-    qCDebug(domain_server) << "FIXME HRS: sent 'screensharePresence'" << domain_id << QJsonDocument(json).toJson();
+    qCDebug(domain_server) << "FIXME HRS: sent 'screensharePresence'" << QJsonDocument(json).toJson();
 }
 
 void DomainServer::handleSuccessfulScreensharePresence(QNetworkReply* requestReply) {
     QJsonObject jsonObject = QJsonDocument::fromJson(requestReply->readAll()).object();
-    if (jsonObject["status"].toString() == "success") {
-        qCDebug(domain_server) << "FIXME HRS: screensharePresence sent.";
-    } else {
-        qCWarning(domain_server) << "FIXME HRS: screensharePresence api call failed:" << QJsonDocument(jsonObject).toJson(QJsonDocument::Compact);
+    if (jsonObject["status"].toString() != "success") {
+        qCWarning(domain_server) << "screensharePresence api call failed:" << QJsonDocument(jsonObject).toJson(QJsonDocument::Compact);
     }
 }
 
 void DomainServer::handleFailedScreensharePresence(QNetworkReply* requestReply) {
-    qCWarning(domain_server) << "FIXME HRS: screensharePresence api call failed:" << requestReply->error();
+    qCWarning(domain_server) << "screensharePresence api call failed:" << requestReply->error();
 }
