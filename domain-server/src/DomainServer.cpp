@@ -3630,11 +3630,11 @@ void DomainServer::processAvatarZonePresencePacket(QSharedPointer<ReceivedMessag
         return;
     }
     QString verifiedUsername = matchingNode->getPermissions().getVerifiedUserName();
-    static int SCREENSHARE_EXPIRATION_SECONDS = 24 * 60 * 60;
+    static const int SCREENSHARE_EXPIRATION_SECONDS = 24 * 60 * 60;
     screensharePresence(zone.isNull() ? "" : zone.toString(), verifiedUsername, SCREENSHARE_EXPIRATION_SECONDS);
 }
 
-void DomainServer::screensharePresence(QString roomname, QString username, int expiration_seconds) {
+void DomainServer::screensharePresence(QString roomname, QString username, int expirationSeconds) {
     if (!DependencyManager::get<AccountManager>()->hasValidAccessToken()) {
         static std::once_flag presenceAuthorityWarning;
         std::call_once(presenceAuthorityWarning, [] {
@@ -3651,8 +3651,8 @@ void DomainServer::screensharePresence(QString roomname, QString username, int e
     QJsonObject json, screenshare;
     screenshare["username"] = username;
     screenshare["roomname"] = roomname;
-    if (expiration_seconds > 0) {
-        screenshare["expiration"] = expiration_seconds;
+    if (expirationSeconds > 0) {
+        screenshare["expiration"] = expirationSeconds;
     }
     json["screenshare"] = screenshare;
     DependencyManager::get<AccountManager>()->sendRequest(

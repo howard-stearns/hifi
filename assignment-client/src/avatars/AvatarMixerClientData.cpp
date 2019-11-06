@@ -158,11 +158,10 @@ int AvatarMixerClientData::parseData(ReceivedMessage& message, const SlaveShared
         if (currentlyHasPriority != _avatar->getHasPriority()) {
             _avatar->setHasPriority(currentlyHasPriority);
             auto nodeList = DependencyManager::get<NodeList>();
-            const DomainHandler& domainHandler = nodeList->getDomainHandler();
             auto packet = NLPacket::create(PacketType::AvatarZonePresence, 2 * NUM_BYTES_RFC4122_UUID, true);
             packet->write(_avatar->getSessionUUID().toRfc4122());
             packet->write(findPriorityZone.id.toRfc4122());
-            nodeList->sendPacket(std::move(packet), domainHandler.getSockAddr());
+            nodeList->sendPacket(std::move(packet), nodeList->getDomainSockAddr());
         }
         _avatar->setNeedsHeroCheck(false);
     }
