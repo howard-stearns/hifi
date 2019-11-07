@@ -99,7 +99,7 @@ namespace {
         glm::vec3 position;
         bool isInPriorityZone { false };
         float zoneVolume { std::numeric_limits<float>::max() };
-        EntityItemID id;
+        EntityItemID id {};
 
         static bool operation(const OctreeElementPointer& element, void* extraData) {
             auto findPriorityZone = static_cast<FindPriorityZone*>(extraData);
